@@ -1,0 +1,22 @@
+int_RP main_RP() {
+    int_RP 095num1, 095num2, 095result;
+    char_RP 095op;
+
+    095num1 = 10;
+    095num2 = 5;
+    095op = +;
+
+    if_RP (095op == "+") {
+        095result = 095num1 + 095num2;
+    } else_RP if_RP (095op == "-") {
+        095result = 095num1 - 095num2;
+    } else_RP if_RP (095op == "*") {
+        095result = 095num1 * 095num2;
+    } else_RP if_RP (095op == "/") {
+        if_RP (095num2 != 0) {
+            095result = 095num1 / 095num2;
+        } else_RP {
+            095result = 0;
+        }
+    }
+}

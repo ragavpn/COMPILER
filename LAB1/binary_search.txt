@@ -1,0 +1,21 @@
+int_RP main_RP() {
+    int_RP 095arr[6] = {2, 4, 6, 8, 10, 12};
+    int_RP 095key = 8;
+    int_RP 095low = 0;
+    int_RP 095high = 5;
+    int_RP 095mid;
+
+    while_RP (095low <= 095high) {
+        095mid = (095low + 095high) / 2;
+
+        if_RP (095arr[095mid] == 095key) {
+            break_RP;
+        } else_RP if_RP (095arr[095mid] < 095key) {
+            095low = 095mid + 1;
+        } else_RP {
+            095high = 095mid - 1;
+        }
+    }
+
+    return_RP 0;
+}

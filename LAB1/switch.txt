@@ -1,0 +1,17 @@
+int_RP main_RP() {
+    int_RP 095day = 3;
+
+    switch_RP (095day) {
+        case_RP 1:
+            095msg = 095Monday;
+            break_RP;
+        case_RP 2:
+            095msg = 095Tuesday;
+            break_RP;
+        case_RP 3:
+            095msg = 095Wednesday;
+            break_RP;
+    }
+
+    return_RP 0;
+}

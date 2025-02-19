@@ -1,0 +1,60 @@
+int_RP main_RP() {
+    int_RP 095arr[6] = {64, 34, 25, 12, 22, 11};
+    int_RP 095size = 6;
+    int_RP 095left = 0;
+    int_RP 095right = 095size - 1;
+    int_RP 095mid;
+    int_RP 095i;
+    int_RP 095j;
+    int_RP 095k;
+    int_RP 095temp[6];
+
+    // Merge sort implementation
+    for_RP (095i = 2; 095i <= 095size; 095i = 095i * 2) {
+        for_RP (095j = 0; 095j < 095size; 095j = 095j + 095i) {
+            095mid = 095j + 095i / 2;
+            095right = 095j + 095i;
+
+            if_RP (095right > 095size) {
+                095right = 095size;
+            }
+
+            // Merge process
+            095k = 095j;
+            int_RP 095index1 = 095j;
+            int_RP 095index2 = 095mid;
+
+            while_RP (095index1 < 095mid && 095index2 < 095right) {
+                if_RP (095arr[095index1] <= 095arr[095index2]) {
+                    095temp[095k] = 095arr[095index1];
+                    095index1 = 095index1 + 1;
+                } else_RP {
+                    095temp[095k] = 095arr[095index2];
+                    095index2 = 095index2 + 1;
+                }
+                095k = 095k + 1;
+            }
+
+            // Copy remaining elements
+            while_RP (095index1 < 095mid) {
+                095temp[095k] = 095arr[095index1];
+                095index1 = 095index1 + 1;
+                095k = 095k + 1;
+            }
+
+            while_RP (095index2 < 095right) {
+                095temp[095k] = 095arr[095index2];
+                095index2 = 095index2 + 1;
+                095k = 095k + 1;
+    
+            }
+
+            // Copy back to original array
+            for_RP (095k = 095j; 095k < 095right; 095k = 095k + 1) {
+                095arr[095k] = 095temp[095k];
+            }
+        }
+    }
+
+    return_RP 0;
+} 

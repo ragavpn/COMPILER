@@ -1,0 +1,14 @@
+int_RP main_RP() {
+    int_RP 095arr[5] = {1, 3, 5, 7, 9};
+    int_RP 095key = 5;
+    int_RP 095found = 0;
+
+    for_RP (int_RP 095i = 0; 095i < 5; 095i++) {
+        if_RP (095arr[095i] == 095key) {
+            095found = 1;
+            break_RP;
+        }
+    }
+
+    return_RP 0;
+}
