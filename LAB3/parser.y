@@ -108,7 +108,7 @@ char* getTypeFromKeyword(char* keyword) {
 %token <str> IDENTIFIER NUMBER KEYWORD
 %token IF ELSE WHILE FOR SWITCH CASE DEFAULT RETURN ASSIGN EQ PLUS MINUS MULT DIV MOD AND OR NOT LT GT LE GE INCREMENT DECREMENT
 %token LPAREN RPAREN LBRACE RBRACE SEMICOLON COMMA COLON LBRACKET RBRACKET
-%type <node> expression statement program block statements if_statement while_statement for_statement switch_statement case_statement default_case cases declaration condition increment_expr
+%type <node> expression statement program block statements matched_stmt unmatched_stmt while_statement for_statement switch_statement case_statement default_case cases declaration condition increment_expr
 
 %%
 
@@ -159,16 +159,30 @@ statement:
             $$ = createNode("ArrayAssignment", "int", createNode($1, "array", NULL, NULL), $3);
         }
     }
-    | if_statement { $$ = $1; }
+    | matched_stmt { $$ = $1; }
+    | unmatched_stmt { $$ = $1; }
     | while_statement { $$ = $1; }
     | for_statement { $$ = $1; }
     | switch_statement { $$ = $1; }
     | expression SEMICOLON { $$ = $1; }
     ;
 
-if_statement:
-    KEYWORD LPAREN expression RPAREN block {
-        // Check if the keyword is if_RP
+matched_stmt:
+    KEYWORD LPAREN expression RPAREN matched_stmt KEYWORD matched_stmt {
+        if (strcmp($1, "if_RP") == 0 && strcmp($6, "else_RP") == 0) {
+            Node *if_node = createNode("If", "control", $3, $5);
+            Node *else_node = createNode("Else", "control", NULL, $7);
+            $$ = createNode("IfElse", "control", if_node, else_node);
+        } else {
+            yyerror("Expected 'if_RP' and 'else_RP' keywords");
+            $$ = NULL;
+        }
+    }
+    | block { $$ = $1; }
+    ;
+
+unmatched_stmt:
+    KEYWORD LPAREN expression RPAREN statement {
         if (strcmp($1, "if_RP") == 0) {
             $$ = createNode("If", "control", $3, $5);
         } else {
@@ -176,7 +190,17 @@ if_statement:
             $$ = NULL;
         }
     }
-    | KEYWORD LPAREN error RPAREN block {
+    | KEYWORD LPAREN expression RPAREN matched_stmt KEYWORD unmatched_stmt {
+        if (strcmp($1, "if_RP") == 0 && strcmp($6, "else_RP") == 0) {
+            Node *if_node = createNode("If", "control", $3, $5);
+            Node *else_node = createNode("Else", "control", NULL, $7);
+            $$ = createNode("IfElse", "control", if_node, else_node);
+        } else {
+            yyerror("Expected 'if_RP' and 'else_RP' keywords");
+            $$ = NULL;
+        }
+    }
+    | KEYWORD LPAREN error RPAREN statement {
         yyerror("Expected expression in if statement");
         $$ = NULL;
     }
