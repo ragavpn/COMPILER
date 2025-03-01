@@ -20,6 +20,9 @@ void print_token(const char* token_type, const char* value) {
 }
 %}
 
+%x COMMENT
+%x MULTILINE_COMMENT
+
 %%
 auto_RP|break_RP|case_RP|char_RP|const_RP|continue_RP|default_RP|do_RP|double_RP|else_RP|elif_RP|enum_RP|extern_RP|float_RP|for_RP|goto_RP|if_RP|int_RP|long_RP|register_RP|return_RP|short_RP|signed_RP|sizeof_RP|static_RP|struct_RP|switch_RP|typedef_RP|union_RP|unsigned_RP|void_RP|volatile_RP|while_RP {
     print_token("KEYWORD", yytext);
@@ -36,6 +39,16 @@ auto_RP|break_RP|case_RP|char_RP|const_RP|continue_RP|default_RP|do_RP|double_RP
     yylval.str = strdup(yytext);
     return NUMBER;
 }
+
+"//"            { BEGIN(COMMENT); print_token("COMMENT", "//"); }
+<COMMENT>.      { /* Ignore single line comment content */ }
+<COMMENT>\n     { BEGIN(INITIAL); /* End of single line comment */ }
+
+"/*"            { BEGIN(MULTILINE_COMMENT); print_token("COMMENT", "/*"); }
+<MULTILINE_COMMENT>[^*]*        { /* Ignore multiline comment content */ }
+<MULTILINE_COMMENT>"*"+[^*/]*   { /* Ignore multiline comment content with stars */ }
+<MULTILINE_COMMENT>"*"+"/"      { BEGIN(INITIAL); /* End of multiline comment */ }
+
 "="     { print_token("ASSIGN", "="); return ASSIGN; }
 "=="    { print_token("EQ", "=="); return EQ; }
 "+"     { print_token("PLUS", "+"); return PLUS; }
@@ -68,4 +81,3 @@ auto_RP|break_RP|case_RP|char_RP|const_RP|continue_RP|default_RP|do_RP|double_RP
 int yywrap() {
     return 1;
 }
-
