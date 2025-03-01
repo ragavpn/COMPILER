@@ -113,6 +113,16 @@ char* checkTypeCompatibility(const char* type1, const char* type2, const char* o
         return strdup("float");
     }
     
+    // Special check for modulo - both operands must be int
+    if (strcmp(operation, "%") == 0) {
+        if (strcmp(type1, "int") != 0 || strcmp(type2, "int") != 0) {
+            printf("Semantic Error: Modulo operation requires integer operands, got '%s' and '%s'\n",
+                   type1, type2);
+            return strdup("error");
+        }
+        return strdup("int");
+    }
+    
     // Default case - incompatible types
     printf("Semantic Error: Incompatible types '%s' and '%s' for operation '%s'\n", 
            type1, type2, operation);
@@ -487,18 +497,22 @@ expression:
         free(resultType);
     }
     | expression MOD expression {
-        // Modulo should only work on integers
-        if (strcmp($1->type, "int") == 0 && strcmp($3->type, "int") == 0) {
-            $$ = createNode("%", "int", $1, $3);
-            if ($3->value != 0) {
+        
+        // Immediately check if either operand is float and report error
+        if (strcmp($1->type, "float") == 0 || strcmp($3->type, "float") == 0) {
+            printf("Semantic Error: Modulo operation requires integer operands, got '%s' and '%s'\n",
+                   $1->type, $3->type);
+            $$ = createNode("%", "error", $1, $3);
+        } else {
+            char* resultType = checkTypeCompatibility($1->type, $3->type, "%");
+            $$ = createNode("%", resultType, $1, $3);
+            if (strcmp(resultType, "int") == 0 && $3->value != 0) {
                 $$->value = $1->value % $3->value;
-            } else {
+            } else if (strcmp(resultType, "int") == 0) {
                 yyerror("Modulo by zero");
                 $$->value = 0;
             }
-        } else {
-            yyerror("Modulo operation requires integer operands");
-            $$ = createNode("%", "error", $1, $3);
+            free(resultType);
         }
     }
     | expression GT expression {
@@ -548,8 +562,14 @@ expression:
         }
     }
     | NUMBER {
-        $$ = createNode($1, "int", NULL, NULL);
-        $$->value = atoi($1);
+        // Check if number contains a decimal point
+        if (strchr($1, '.') != NULL) {
+            $$ = createNode($1, "float", NULL, NULL);
+            $$->value = (int)atof($1); // Store approximate int value
+        } else {
+            $$ = createNode($1, "int", NULL, NULL);
+            $$->value = atoi($1);
+        }
     }
     | LPAREN expression RPAREN { 
         $$ = $2; 

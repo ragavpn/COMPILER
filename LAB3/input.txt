@@ -1,6 +1,17 @@
 {
     int_RP 095x = 42;
+    int_RP 095r = 20.5;  // Error: assigning float to int - type conversion occurs
     float_RP 095y = 20.5;
+    
+    float_RP 095f = 095r % 5.3;  // Error: modulo requires integer operands
+    
+    int_RP 095z = 095y;  // Error: assigning float to int without cast
+    
+    // Mixing types in expressions
+    int_RP 095result = 095x + 095y;  // Error: adding int and float and assigning to int
+    
+    // Array incompatibility
+    095arr[095x + 095y] = 100;  // Error: array index should be int, not float
     
     // Array declarations and operations
     int_RP 095arr[10];  // Declare an array of size 10
