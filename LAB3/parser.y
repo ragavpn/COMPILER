@@ -89,6 +89,58 @@ char* getTypeFromKeyword(char* keyword) {
     }
     return type;
 }
+
+// Function to check type compatibility and return the resulting type
+char* checkTypeCompatibility(const char* type1, const char* type2, const char* operation) {
+    // If either is error, propagate error
+    if (strcmp(type1, "error") == 0 || strcmp(type2, "error") == 0) {
+        return strdup("error");
+    }
+    
+    // Check for array types in operations - disallow
+    if (strcmp(type1, "array") == 0 || strcmp(type2, "array") == 0) {
+        printf("Semantic Error: Cannot perform operation '%s' on array type\n", operation);
+        return strdup("error");
+    }
+    
+    // Both int? Result is int
+    if (strcmp(type1, "int") == 0 && strcmp(type2, "int") == 0) {
+        return strdup("int");
+    }
+    
+    // If either is float, result is float
+    if (strcmp(type1, "float") == 0 || strcmp(type2, "float") == 0) {
+        return strdup("float");
+    }
+    
+    // Default case - incompatible types
+    printf("Semantic Error: Incompatible types '%s' and '%s' for operation '%s'\n", 
+           type1, type2, operation);
+    return strdup("error");
+}
+
+// Function to check assignment compatibility
+int isAssignmentCompatible(const char* targetType, const char* valueType) {
+    // Cannot assign to array
+    if (strcmp(targetType, "array") == 0) {
+        printf("Semantic Error: Cannot assign to array type\n");
+        return 0;
+    }
+    
+    // Same types are always compatible
+    if (strcmp(targetType, valueType) == 0) {
+        return 1;
+    }
+    
+    // Int can be assigned to float (implicit conversion)
+    if (strcmp(targetType, "float") == 0 && strcmp(valueType, "int") == 0) {
+        return 1;
+    }
+    
+    // All other combinations are incompatible
+    printf("Semantic Error: Cannot assign '%s' to '%s'\n", valueType, targetType);
+    return 0;
+}
 %}
 
 %left OR
@@ -141,8 +193,12 @@ statements:
 statement:
     KEYWORD IDENTIFIER ASSIGN expression SEMICOLON {
         char* type = getTypeFromKeyword($1);
-        addSymbol($2, type, currentScope, 0);
-        $$ = createNode("Assignment", type, createNode($2, type, NULL, NULL), $4);
+        if (isAssignmentCompatible(type, $4->type)) {
+            addSymbol($2, type, currentScope, 0);
+            $$ = createNode("Assignment", type, createNode($2, type, NULL, NULL), $4);
+        } else {
+            $$ = createNode("Error", "error", NULL, NULL);
+        }
         free(type);
     }
     | KEYWORD IDENTIFIER LBRACKET expression RBRACKET SEMICOLON {
@@ -166,15 +222,19 @@ statement:
         int index = lookupSymbol($1, currentScope);
         if (index == -1) {
             yyerror("Undeclared variable used");
-        } else {
+            $$ = createNode("Error", "error", NULL, NULL);
+        } else if (isAssignmentCompatible(symbolTable[index].type, $3->type)) {
             $$ = createNode("Assignment", symbolTable[index].type, 
                            createNode($1, symbolTable[index].type, NULL, NULL), $3);
+        } else {
+            $$ = createNode("Error", "error", NULL, NULL);
         }
     }
     | IDENTIFIER LBRACKET expression RBRACKET ASSIGN expression SEMICOLON {
         int index = lookupSymbol($1, currentScope);
         if (index == -1 || strcmp(symbolTable[index].type, "array") != 0) {
             yyerror("Invalid array access");
+            $$ = createNode("Error", "error", NULL, NULL);
         } else {
             $$ = createNode("ArrayAssignment", "int", 
                            createNode($1, "array", $3, NULL), $6);
@@ -184,6 +244,7 @@ statement:
         int index = lookupSymbol($1, currentScope);
         if (index == -1 || strcmp(symbolTable[index].type, "array") != 0) {
             yyerror("Invalid array access");
+            $$ = createNode("Error", "error", NULL, NULL);
         } else {
             Node* indices = createNode("Indices", "int", $3, $6);
             $$ = createNode("Array2DAssignment", "int",
@@ -389,33 +450,55 @@ break_statement:
 
 expression:
     expression PLUS expression {
-        $$ = createNode("+", "int", $1, $3);
-        $$->value = $1->value + $3->value;
+        char* resultType = checkTypeCompatibility($1->type, $3->type, "+");
+        $$ = createNode("+", resultType, $1, $3);
+        if (strcmp(resultType, "int") == 0) {
+            $$->value = $1->value + $3->value;
+        }
+        free(resultType);
     }
     | expression MINUS expression {
-        $$ = createNode("-", "int", $1, $3);
-        $$->value = $1->value - $3->value;
+        char* resultType = checkTypeCompatibility($1->type, $3->type, "-");
+        $$ = createNode("-", resultType, $1, $3);
+        if (strcmp(resultType, "int") == 0) {
+            $$->value = $1->value - $3->value;
+        }
+        free(resultType);
     }
     | expression MULT expression {
-        $$ = createNode("*", "int", $1, $3);
-        $$->value = $1->value * $3->value;
+        char* resultType = checkTypeCompatibility($1->type, $3->type, "*");
+        $$ = createNode("*", resultType, $1, $3);
+        if (strcmp(resultType, "int") == 0) {
+            $$->value = $1->value * $3->value;
+        }
+        free(resultType);
     }
     | expression DIV expression {
-        $$ = createNode("/", "int", $1, $3);
-        if ($3->value != 0) {
-            $$->value = $1->value / $3->value;
-        } else {
-            yyerror("Division by zero");
-            $$->value = 0;
+        char* resultType = checkTypeCompatibility($1->type, $3->type, "/");
+        $$ = createNode("/", resultType, $1, $3);
+        if (strcmp(resultType, "int") == 0) {
+            if ($3->value != 0) {
+                $$->value = $1->value / $3->value;
+            } else {
+                yyerror("Division by zero");
+                $$->value = 0;
+            }
         }
+        free(resultType);
     }
     | expression MOD expression {
-        $$ = createNode("%", "int", $1, $3);
-        if ($3->value != 0) {
-            $$->value = $1->value % $3->value;
+        // Modulo should only work on integers
+        if (strcmp($1->type, "int") == 0 && strcmp($3->type, "int") == 0) {
+            $$ = createNode("%", "int", $1, $3);
+            if ($3->value != 0) {
+                $$->value = $1->value % $3->value;
+            } else {
+                yyerror("Modulo by zero");
+                $$->value = 0;
+            }
         } else {
-            yyerror("Modulo by zero");
-            $$->value = 0;
+            yyerror("Modulo operation requires integer operands");
+            $$ = createNode("%", "error", $1, $3);
         }
     }
     | expression GT expression {
@@ -470,16 +553,6 @@ expression:
     }
     | LPAREN expression RPAREN { 
         $$ = $2; 
-    }
-    | IDENTIFIER ASSIGN expression {
-        int index = lookupSymbol($1, currentScope);
-        if (index == -1) {
-            // Instead of error, create a forward declaration
-            addSymbol($1, "int", currentScope, 0);  // Default to int
-            index = lookupSymbol($1, currentScope);
-        }
-        $$ = createNode("Assignment", symbolTable[index].type, 
-                       createNode($1, symbolTable[index].type, NULL, NULL), $3);
     }
     | IDENTIFIER INCREMENT {
         int index = lookupSymbol($1, currentScope);
