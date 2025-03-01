@@ -108,7 +108,9 @@ char* getTypeFromKeyword(char* keyword) {
 %token <str> IDENTIFIER NUMBER KEYWORD
 %token IF ELSE WHILE FOR SWITCH CASE DEFAULT RETURN ASSIGN EQ PLUS MINUS MULT DIV MOD AND OR NOT LT GT LE GE INCREMENT DECREMENT
 %token LPAREN RPAREN LBRACE RBRACE SEMICOLON COMMA COLON LBRACKET RBRACKET
-%type <node> expression statement program block statements matched_stmt unmatched_stmt for_statement switch_statement case_statement default_case cases declaration condition increment_expr elif_chain elif_clause
+%token BREAK
+%type <node> expression statement program block statements matched_stmt unmatched_stmt for_statement switch_statement case_statement 
+%type <node> cases declaration condition increment_expr elif_chain elif_clause case_statements case_statement_item break_statement
 
 %%
 
@@ -143,12 +145,30 @@ statement:
         $$ = createNode("Assignment", type, createNode($2, type, NULL, NULL), $4);
         free(type);
     }
+    | KEYWORD IDENTIFIER LBRACKET expression RBRACKET SEMICOLON {
+        char* type = getTypeFromKeyword($1);
+        // Store as array type and track dimensions
+        addSymbol($2, "array", currentScope, 1);
+        $$ = createNode("ArrayDeclaration", type, 
+                       createNode($2, "array", NULL, NULL), $4);
+        free(type);
+    }
+    | KEYWORD IDENTIFIER LBRACKET expression RBRACKET LBRACKET expression RBRACKET SEMICOLON {
+        char* type = getTypeFromKeyword($1);
+        // For 2D arrays, store dimensions count as 2
+        addSymbol($2, "array", currentScope, 2);
+        Node* dimensions = createNode("Dimensions", "int", $4, $7);
+        $$ = createNode("ArrayDeclaration2D", type,
+                       createNode($2, "array", NULL, NULL), dimensions);
+        free(type);
+    }
     | IDENTIFIER ASSIGN expression SEMICOLON {
         int index = lookupSymbol($1, currentScope);
         if (index == -1) {
             yyerror("Undeclared variable used");
         } else {
-            $$ = createNode("Assignment", symbolTable[index].type, createNode($1, symbolTable[index].type, NULL, NULL), $3);
+            $$ = createNode("Assignment", symbolTable[index].type, 
+                           createNode($1, symbolTable[index].type, NULL, NULL), $3);
         }
     }
     | IDENTIFIER LBRACKET expression RBRACKET ASSIGN expression SEMICOLON {
@@ -156,7 +176,18 @@ statement:
         if (index == -1 || strcmp(symbolTable[index].type, "array") != 0) {
             yyerror("Invalid array access");
         } else {
-            $$ = createNode("ArrayAssignment", "int", createNode($1, "array", NULL, NULL), $3);
+            $$ = createNode("ArrayAssignment", "int", 
+                           createNode($1, "array", $3, NULL), $6);
+        }
+    }
+    | IDENTIFIER LBRACKET expression RBRACKET LBRACKET expression RBRACKET ASSIGN expression SEMICOLON {
+        int index = lookupSymbol($1, currentScope);
+        if (index == -1 || strcmp(symbolTable[index].type, "array") != 0) {
+            yyerror("Invalid array access");
+        } else {
+            Node* indices = createNode("Indices", "int", $3, $6);
+            $$ = createNode("Array2DAssignment", "int",
+                           createNode($1, "array", indices, NULL), $9);
         }
     }
     | matched_stmt { $$ = $1; }
@@ -296,22 +327,11 @@ increment_expr:
     ;
 
 switch_statement:
-    KEYWORD LPAREN expression RPAREN LBRACE cases default_case RBRACE {
+    KEYWORD LPAREN expression RPAREN LBRACE cases RBRACE {
         if (strcmp($1, "switch_RP") == 0) {
-            $$ = createNode("Switch", "control", $3, createNode("Cases", "block", $6, $7));
+            $$ = createNode("Switch", "control", $3, $6);
         } else {
             yyerror("Expected 'switch_RP' keyword");
-            $$ = NULL;
-        }
-    }
-    ;
-
-case_statement:
-    KEYWORD NUMBER COLON statement {
-        if (strcmp($1, "case_RP") == 0) {
-            $$ = createNode("Case", "int", createNode($2, "int", NULL, NULL), $4);
-        } else {
-            yyerror("Expected 'case_RP' keyword");
             $$ = NULL;
         }
     }
@@ -322,12 +342,46 @@ cases:
     | case_statement { $$ = $1; }
     ;
 
-default_case:
-    KEYWORD COLON statement {
+case_statement:
+    KEYWORD NUMBER COLON case_statements break_statement {
+        if (strcmp($1, "case_RP") == 0) {
+            Node* caseBody = createNode("CaseBody", "block", $4, $5);
+            $$ = createNode("Case", "int", createNode($2, "int", NULL, NULL), caseBody);
+        } else {
+            yyerror("Expected 'case_RP' keyword");
+            $$ = NULL;
+        }
+    }
+    | KEYWORD COLON case_statements break_statement {
         if (strcmp($1, "default_RP") == 0) {
-            $$ = createNode("Default", "int", NULL, $3);
+            Node* defaultBody = createNode("DefaultBody", "block", $3, $4);
+            $$ = createNode("Default", "int", NULL, defaultBody);
         } else {
             yyerror("Expected 'default_RP' keyword");
+            $$ = NULL;
+        }
+    }
+    ;
+
+case_statements:
+    case_statements case_statement_item { 
+        $$ = createNode("CaseStatements", "block", $1, $2); 
+    }
+    | case_statement_item { 
+        $$ = $1; 
+    }
+    ;
+
+case_statement_item:
+    statement { $$ = $1; }
+    ;
+
+break_statement:
+    KEYWORD SEMICOLON {
+        if (strcmp($1, "break_RP") == 0) {
+            $$ = createNode("Break", "control", NULL, NULL);
+        } else {
+            yyerror("Expected 'break_RP' keyword");
             $$ = NULL;
         }
     }
@@ -445,6 +499,27 @@ expression:
         } else {
             addSymbol($1, "int", currentScope, 0);
             $$ = createNode("--", "int", createNode($1, "int", NULL, NULL), NULL);
+        }
+    }
+    | IDENTIFIER LBRACKET expression RBRACKET {
+        int index = lookupSymbol($1, currentScope);
+        if (index == -1 || strcmp(symbolTable[index].type, "array") != 0) {
+            yyerror("Invalid array access in expression");
+            $$ = createNode("error", "error", NULL, NULL);
+        } else {
+            $$ = createNode("ArrayAccess", "int", 
+                           createNode($1, "array", $3, NULL), NULL);
+        }
+    }
+    | IDENTIFIER LBRACKET expression RBRACKET LBRACKET expression RBRACKET {
+        int index = lookupSymbol($1, currentScope);
+        if (index == -1 || strcmp(symbolTable[index].type, "array") != 0) {
+            yyerror("Invalid 2D array access in expression");
+            $$ = createNode("error", "error", NULL, NULL);
+        } else {
+            Node* indices = createNode("Indices", "int", $3, $6);
+            $$ = createNode("Array2DAccess", "int",
+                           createNode($1, "array", indices, NULL), NULL);
         }
     }
     ;

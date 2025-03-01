@@ -1,8 +1,22 @@
 {
     int_RP 095x = 42;
     float_RP 095y = 20.5;
+    
+    // Array declarations and operations
+    int_RP 095arr[10];  // Declare an array of size 10
+    095arr[0] = 100;    // Assign value to first element
+    095arr[5] = 095x;   // Assign variable value to array element
+    
+    int_RP 095matrix[3][3];  // 2D array declaration
+    095matrix[0][0] = 1;
+    095matrix[1][2] = 095arr[0] + 5;
+    
+    float_RP 095scores[5];
+    095scores[2] = 095y * 2;
+    
     if_RP (095x > 40) {
         095y = 095x + 10;
+        095arr[1] = 095arr[0] + 10;  // Array operations inside control structures
     } elif_RP (095x > 30) {
         095y = 095x + 5;
     } elif_RP (095x > 20) {
@@ -10,18 +24,24 @@
     } else_RP {
         int_RP 095z = 42;
         095y = 095x - 10;
+        095arr[3] = 095z;
     }
+    
     float_RP 095sum = 0;
     for_RP (int_RP 095i = 0; 095i < 10; 095i++) {
         095sum = 095sum + 095i;
+        095arr[095i] = 095i * 2;  // Array assignment in loop
     }
+    
     int_RP 095result = 0;
     switch_RP (095x) {
-        case_RP 1: 095result = 10; 
-        case_RP 2: 095result = 20;
-        default_RP: 095result = 0;
+        case_RP 1: 095result = 10; 095arr[1] = 100; break_RP;
+        case_RP 2: 095result = 20; 095arr[2] = 200; break_RP;
+        default_RP: 095result = 0; 095arr[0] = 095result; break_RP;
     }
+    
     while_RP (095x > 0) {
+        095arr[095x % 10] = 095x;  // Using modulo to stay within array bounds
         095x = 095x - 1;
     }
 }

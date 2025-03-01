@@ -90,7 +90,8 @@ extern int yydebug;
     COMMA = 291,                   /* COMMA  */
     COLON = 292,                   /* COLON  */
     LBRACKET = 293,                /* LBRACKET  */
-    RBRACKET = 294                 /* RBRACKET  */
+    RBRACKET = 294,                /* RBRACKET  */
+    BREAK = 295                    /* BREAK  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -104,7 +105,7 @@ union YYSTYPE
     char *str;
     struct Node *node;
 
-#line 108 "parser.tab.h"
+#line 109 "parser.tab.h"
 
 };
 typedef union YYSTYPE YYSTYPE;
