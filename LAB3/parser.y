@@ -108,7 +108,7 @@ char* getTypeFromKeyword(char* keyword) {
 %token <str> IDENTIFIER NUMBER KEYWORD
 %token IF ELSE WHILE FOR SWITCH CASE DEFAULT RETURN ASSIGN EQ PLUS MINUS MULT DIV MOD AND OR NOT LT GT LE GE INCREMENT DECREMENT
 %token LPAREN RPAREN LBRACE RBRACE SEMICOLON COMMA COLON LBRACKET RBRACKET
-%type <node> expression statement program block statements matched_stmt unmatched_stmt while_statement for_statement switch_statement case_statement default_case cases declaration condition increment_expr elif_chain elif_clause
+%type <node> expression statement program block statements matched_stmt unmatched_stmt for_statement switch_statement case_statement default_case cases declaration condition increment_expr elif_chain elif_clause
 
 %%
 
