@@ -21,7 +21,7 @@ void print_token(const char* token_type, const char* value) {
 %}
 
 %%
-auto_RP|break_RP|case_RP|char_RP|const_RP|continue_RP|default_RP|do_RP|double_RP|else_RP|enum_RP|extern_RP|float_RP|for_RP|goto_RP|if_RP|int_RP|long_RP|register_RP|return_RP|short_RP|signed_RP|sizeof_RP|static_RP|struct_RP|switch_RP|typedef_RP|union_RP|unsigned_RP|void_RP|volatile_RP|while_RP {
+auto_RP|break_RP|case_RP|char_RP|const_RP|continue_RP|default_RP|do_RP|double_RP|else_RP|elif_RP|enum_RP|extern_RP|float_RP|for_RP|goto_RP|if_RP|int_RP|long_RP|register_RP|return_RP|short_RP|signed_RP|sizeof_RP|static_RP|struct_RP|switch_RP|typedef_RP|union_RP|unsigned_RP|void_RP|volatile_RP|while_RP {
     print_token("KEYWORD", yytext);
     yylval.str = strdup(yytext);
     return KEYWORD;

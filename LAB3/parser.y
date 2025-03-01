@@ -108,7 +108,7 @@ char* getTypeFromKeyword(char* keyword) {
 %token <str> IDENTIFIER NUMBER KEYWORD
 %token IF ELSE WHILE FOR SWITCH CASE DEFAULT RETURN ASSIGN EQ PLUS MINUS MULT DIV MOD AND OR NOT LT GT LE GE INCREMENT DECREMENT
 %token LPAREN RPAREN LBRACE RBRACE SEMICOLON COMMA COLON LBRACKET RBRACKET
-%type <node> expression statement program block statements matched_stmt unmatched_stmt while_statement for_statement switch_statement case_statement default_case cases declaration condition increment_expr
+%type <node> expression statement program block statements matched_stmt unmatched_stmt while_statement for_statement switch_statement case_statement default_case cases declaration condition increment_expr elif_chain elif_clause
 
 %%
 
@@ -161,7 +161,6 @@ statement:
     }
     | matched_stmt { $$ = $1; }
     | unmatched_stmt { $$ = $1; }
-    | while_statement { $$ = $1; }
     | for_statement { $$ = $1; }
     | switch_statement { $$ = $1; }
     | expression SEMICOLON { $$ = $1; }
@@ -178,6 +177,34 @@ matched_stmt:
             $$ = NULL;
         }
     }
+    | KEYWORD LPAREN expression RPAREN matched_stmt elif_chain KEYWORD matched_stmt {
+        if (strcmp($1, "if_RP") == 0 && strcmp($7, "else_RP") == 0) {
+            Node *if_node = createNode("If", "control", $3, $5);
+            // Add the elif chain in between
+            Node *elif_else = createNode("ElifElse", "control", $6, $8);
+            $$ = createNode("IfElifElse", "control", if_node, elif_else);
+        } else {
+            yyerror("Expected 'if_RP' and 'else_RP' keywords");
+            $$ = NULL;
+        }
+    }
+    | KEYWORD LPAREN expression RPAREN matched_stmt elif_chain {
+        if (strcmp($1, "if_RP") == 0) {
+            Node *if_node = createNode("If", "control", $3, $5);
+            $$ = createNode("IfElif", "control", if_node, $6);
+        } else {
+            yyerror("Expected 'if_RP' keyword");
+            $$ = NULL;
+        }
+    }
+    | KEYWORD LPAREN expression RPAREN matched_stmt {
+        if (strcmp($1, "while_RP") == 0) {
+            $$ = createNode("While", "control", $3, $5);
+        } else {
+            yyerror("Expected 'while_RP' keyword");
+            $$ = NULL;
+        }
+    }
     | block { $$ = $1; }
     ;
 
@@ -185,8 +212,10 @@ unmatched_stmt:
     KEYWORD LPAREN expression RPAREN statement {
         if (strcmp($1, "if_RP") == 0) {
             $$ = createNode("If", "control", $3, $5);
+        } else if (strcmp($1, "while_RP") == 0) {
+            $$ = createNode("While", "control", $3, $5);
         } else {
-            yyerror("Expected 'if_RP' keyword");
+            yyerror("Expected 'if_RP' or 'while_RP' keyword");
             $$ = NULL;
         }
     }
@@ -200,25 +229,24 @@ unmatched_stmt:
             $$ = NULL;
         }
     }
+    | KEYWORD LPAREN expression RPAREN matched_stmt elif_chain KEYWORD unmatched_stmt {
+        if (strcmp($1, "if_RP") == 0 && strcmp($7, "else_RP") == 0) {
+            Node *if_node = createNode("If", "control", $3, $5);
+            Node *elif_else = createNode("ElifElse", "control", $6, $8);
+            $$ = createNode("IfElifElse", "control", if_node, elif_else);
+        } else {
+            yyerror("Expected 'if_RP' and 'else_RP' keywords");
+            $$ = NULL;
+        }
+    }
     | KEYWORD LPAREN error RPAREN statement {
         yyerror("Expected expression in if statement");
         $$ = NULL;
     }
     ;
 
-while_statement:
-    KEYWORD LPAREN expression RPAREN block {
-        if (strcmp($1, "while_RP") == 0) {
-            $$ = createNode("While", "control", $3, $5);
-        } else {
-            yyerror("Expected 'while_RP' keyword");
-            $$ = NULL;
-        }
-    }
-    ;
-
 for_statement:
-    KEYWORD LPAREN declaration SEMICOLON condition SEMICOLON increment_expr RPAREN block {
+    KEYWORD LPAREN declaration SEMICOLON condition SEMICOLON increment_expr RPAREN statement {
         if (strcmp($1, "for_RP") == 0) {
             $$ = createNode("For", "control", $3,
                 createNode("ForBody", "control", $5,
@@ -417,6 +445,23 @@ expression:
         } else {
             addSymbol($1, "int", currentScope, 0);
             $$ = createNode("--", "int", createNode($1, "int", NULL, NULL), NULL);
+        }
+    }
+    ;
+
+// New rules for elif chains and clauses
+elif_chain:
+    elif_chain elif_clause { $$ = createNode("ElifChain", "control", $1, $2); }
+    | elif_clause { $$ = $1; }
+    ;
+
+elif_clause:
+    KEYWORD LPAREN expression RPAREN matched_stmt {
+        if (strcmp($1, "elif_RP") == 0) {
+            $$ = createNode("Elif", "control", $3, $5);
+        } else {
+            yyerror("Expected 'elif_RP' keyword");
+            $$ = NULL;
         }
     }
     ;

@@ -1,8 +1,12 @@
 {
     int_RP 095x = 42;
     float_RP 095y = 20.5;
-    if_RP (095x > 5) {
+    if_RP (095x > 40) {
         095y = 095x + 10;
+    } elif_RP (095x > 30) {
+        095y = 095x + 5;
+    } elif_RP (095x > 20) {
+        095y = 095x + 2;
     } else_RP {
         int_RP 095z = 42;
         095y = 095x - 10;
@@ -16,5 +20,8 @@
         case_RP 1: 095result = 10; 
         case_RP 2: 095result = 20;
         default_RP: 095result = 0;
+    }
+    while_RP (095x > 0) {
+        095x = 095x - 1;
     }
 }
