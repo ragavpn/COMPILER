@@ -89,7 +89,9 @@ void print_token(const char* lexeme, const char* category) {
 
 [0-9]+          { print_token(yytext, "NUMBER"); }
 
-[0-9]+\.[0-9]+  { print_token(yytext, "FLOAT_VALUE"); }
+0[xX][0-9A-Fa-f]+ { print_token(yytext, "HEX_INTEGER"); }
+
+[0-9]+\.[0-9]*([eE][+-]?[0-9]+)?  { print_token(yytext, "DOUBLE_VALUE"); }
 
 \"              {   /* Handle string literals with error checking */
                     char string_buf[1000];
