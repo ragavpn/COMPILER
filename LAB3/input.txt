@@ -1,0 +1,17 @@
+{
+    int_RP 095x = 42;
+    float_RP 095y = 20.5;
+    if_RP (095x > 5) {
+        095y = 095x + 10;
+    }
+    float_RP 095sum = 0;
+    for_RP (int_RP 095i = 0; 095i < 10; 095i++) {
+        095sum = 095sum + 095i;
+    }
+    int_RP 095result = 0;
+    switch_RP (095x) {
+        case_RP 1: 095result = 10; 
+        case_RP 2: 095result = 20;
+        default_RP: 095result = 0;
+    }
+}
