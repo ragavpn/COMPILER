@@ -41,6 +41,8 @@ auto_RP|break_RP|case_RP|char_RP|const_RP|continue_RP|default_RP|do_RP|double_RP
     return NUMBER; 
 }
 
+"++"    { print_token("INCREMENT", "++"); return INCREMENT; }
+"--"    { print_token("DECREMENT", "--"); return DECREMENT; }
 "="     { print_token("ASSIGN", "="); return ASSIGN; }
 "=="    { print_token("EQ", "=="); return EQ; }
 "+"     { print_token("PLUS", "+"); return PLUS; }
@@ -62,6 +64,7 @@ auto_RP|break_RP|case_RP|char_RP|const_RP|continue_RP|default_RP|do_RP|double_RP
 "}"     { print_token("RBRACE", "}"); return RBRACE; }
 ";"     { print_token("SEMICOLON", ";"); return SEMICOLON; }
 ","     { print_token("COMMA", ","); return COMMA; }
+
 
 [ \t\r\n]+    { /* Ignore whitespace */ }
 .             { printf("Unexpected character: %s\n", yytext); }
