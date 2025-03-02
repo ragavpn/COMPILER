@@ -1,58 +1,81 @@
 {
-    int_RP 095x = 42;
-    int_RP 095r = 20.5;  // Error: assigning float to int - type conversion occurs
-    float_RP 095y = 20.5;
+    int_RP 095printHello() {
+        int_RP 095message = 42;
+        return_RP 095message;
+    }
     
-    float_RP 095f = 095r % 5.3;  // Error: modulo requires integer operands
+    int_RP 095add(int_RP 095param1, int_RP 095param2) {
+        int_RP 095result_add = 095param1 + 095param2;
+        return_RP 095result_add;
+    }
     
-    int_RP 095z = 095y;  // Error: assigning float to int without cast
+    float_RP 095calculate(int_RP 095param3, float_RP 095param4) {
+        float_RP 095result_calc = 095param3 * 095param4;
+        return_RP 095result_calc;
+    }
     
-    // Mixing types in expressions
-    int_RP 095result = 095x + 095y;  // Error: adding int and float and assigning to int
-    
-    // Array incompatibility
-    095arr[095x + 095y] = 100;  // Error: array index should be int, not float
+    // Basic variable declarations
+    int_RP 095num1 = 42;
+    float_RP 095num2 = 20.5;
     
     // Array declarations and operations
-    int_RP 095arr[10];  // Declare an array of size 10
-    095arr[0] = 100;    // Assign value to first element
-    095arr[5] = 095x;   // Assign variable value to array element
+    int_RP 095arr1[10];  // 1D array
+    095arr1[0] = 100;
+    095arr1[5] = 095num1;
     
-    int_RP 095matrix[3][3];  // 2D array declaration
+    // 2D array declaration and operations
+    int_RP 095matrix[3][3];
     095matrix[0][0] = 1;
-    095matrix[1][2] = 095arr[0] + 5;
+    095matrix[1][2] = 095arr1[0] + 5;
     
+    // Float array
     float_RP 095scores[5];
-    095scores[2] = 095y * 2;
+    095scores[2] = 095num2 * 2;
     
-    if_RP (095x > 40) {
-        095y = 095x + 10;
-        095arr[1] = 095arr[0] + 10;  // Array operations inside control structures
-    } elif_RP (095x > 30) {
-        095y = 095x + 5;
-    } elif_RP (095x > 20) {
-        095y = 095x + 2;
+    if_RP (095num1 > 40) {
+        095num2 = 095num1 + 10;
+        095arr1[1] = 095arr1[0] + 10;
+    } elif_RP (095num1 > 30) {
+        095num2 = 095num1 + 5;
     } else_RP {
-        int_RP 095z = 42;
-        095y = 095x - 10;
-        095arr[3] = 095z;
+        int_RP 095local_var = 42;
+        095num2 = 095num1 - 10;
+        095arr1[3] = 095local_var;
     }
     
-    float_RP 095sum = 0;
+    float_RP 095total = 0;
     for_RP (int_RP 095i = 0; 095i < 10; 095i++) {
-        095sum = 095sum + 095i;
-        095arr[095i] = 095i * 2;  // Array assignment in loop
+        095total = 095total + 095i;
+        095arr1[095i] = 095i * 2;
     }
     
-    int_RP 095result = 0;
-    switch_RP (095x) {
-        case_RP 1: 095result = 10; 095arr[1] = 100; break_RP;
-        case_RP 2: 095result = 20; 095arr[2] = 200; break_RP;
-        default_RP: 095result = 0; 095arr[0] = 095result; break_RP;
+    int_RP 095choice = 2;
+    switch_RP (095choice) {
+        case_RP 1: 095num1 = 10; 095arr1[1] = 100; break_RP;
+        case_RP 2: 095num1 = 20; 095arr1[2] = 200; break_RP;
+        default_RP: 095num1 = 0; 095arr1[0] = 095num1; break_RP;
     }
     
-    while_RP (095x > 0) {
-        095arr[095x % 10] = 095x;  // Using modulo to stay within array bounds
-        095x = 095x - 1;
+    int_RP 095counter = 5;
+    while_RP (095counter > 0) {
+        095arr1[095counter % 10] = 095counter;
+        095counter = 095counter - 1;
     }
+    
+    // Function calls
+    095printHello();
+    int_RP 095sum_result = 095add(10, 20);
+    float_RP 095calc_result = 095calculate(095num1, 095num2);
+
+    // Type compatibility tests (with errors)
+    // int_RP 095bad_assign = 20.5;  // Error: assigning float to int - type conversion occurs
+    // float_RP 095mod_test = 095num1 % 095num2;  // Error: modulo requires integer operands
+    // int_RP 095conversion = 095num2;  // Error: assigning float to int without cast
+    // int_RP 095mixed_expr = 095num1 + 095num2;  // Error: adding int and float and assigning to int
+    
+    // Invalid function calls (commented out to allow parsing to continue)
+    // 095undefinedFunction();  // Error: undefined function
+    // 095add(1);  // Error: wrong number of arguments
+    // 095add(1, 2, 3);  // Error: too many arguments
+    // int_RP 095type_mismatch = 095calculate(095num1, 095num2);  // Warning: assigning float to int
 }

@@ -91,7 +91,8 @@ extern int yydebug;
     COLON = 292,                   /* COLON  */
     LBRACKET = 293,                /* LBRACKET  */
     RBRACKET = 294,                /* RBRACKET  */
-    BREAK = 295                    /* BREAK  */
+    BREAK = 295,                   /* BREAK  */
+    FUNCTION = 296                 /* FUNCTION  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -100,12 +101,12 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 165 "parser.y"
+#line 288 "parser.y"
 
     char *str;
     struct Node *node;
 
-#line 109 "parser.tab.h"
+#line 110 "parser.tab.h"
 
 };
 typedef union YYSTYPE YYSTYPE;
