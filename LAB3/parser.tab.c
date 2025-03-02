@@ -836,10 +836,10 @@ static const yytype_int16 yyrline[] =
      423,   433,   444,   445,   446,   447,   448,   449,   464,   468,
      478,   489,   498,   506,   510,   520,   530,   540,   547,   560,
      569,   573,   583,   593,   597,   608,   609,   613,   622,   634,
-     637,   643,   647,   658,   667,   675,   683,   691,   699,   702,
-     705,   708,   711,   714,   717,   720,   723,   726,   736,   746,
-     749,   759,   769,   783,   798,   803,   804,   808,   819,   867,
-     870,   873
+     637,   643,   647,   658,   666,   674,   682,   690,   698,   701,
+     704,   707,   710,   713,   716,   719,   722,   725,   735,   745,
+     748,   758,   768,   782,   797,   802,   803,   807,   818,   866,
+     869,   872
 };
 #endif
 
@@ -2148,16 +2148,15 @@ yyreduce:
         // If either operand is float, result must be float
         if (strcmp((yyvsp[-2].node)->type, "float") == 0 || strcmp((yyvsp[0].node)->type, "float") == 0) {
             (yyval.node) = createNode("+", "float", (yyvsp[-2].node), (yyvsp[0].node));
-            printf("Debug: Created a FLOAT node for %s + %s\n", (yyvsp[-2].node)->name, (yyvsp[0].node)->name);
         } else {
             (yyval.node) = createNode("+", "int", (yyvsp[-2].node), (yyvsp[0].node));
         }
     }
-#line 2157 "parser.tab.c"
+#line 2156 "parser.tab.c"
     break;
 
   case 54: /* expression: expression MINUS expression  */
-#line 667 "parser.y"
+#line 666 "parser.y"
                                   {
         // If either operand is float, result must be float
         if (strcmp((yyvsp[-2].node)->type, "float") == 0 || strcmp((yyvsp[0].node)->type, "float") == 0) {
@@ -2166,11 +2165,11 @@ yyreduce:
             (yyval.node) = createNode("-", "int", (yyvsp[-2].node), (yyvsp[0].node));
         }
     }
-#line 2170 "parser.tab.c"
+#line 2169 "parser.tab.c"
     break;
 
   case 55: /* expression: expression MULT expression  */
-#line 675 "parser.y"
+#line 674 "parser.y"
                                  {
         // If either operand is float, result must be float
         if (strcmp((yyvsp[-2].node)->type, "float") == 0 || strcmp((yyvsp[0].node)->type, "float") == 0) {
@@ -2179,11 +2178,11 @@ yyreduce:
             (yyval.node) = createNode("*", "int", (yyvsp[-2].node), (yyvsp[0].node));
         }
     }
-#line 2183 "parser.tab.c"
+#line 2182 "parser.tab.c"
     break;
 
   case 56: /* expression: expression DIV expression  */
-#line 683 "parser.y"
+#line 682 "parser.y"
                                 {
         // If either operand is float, result must be float
         if (strcmp((yyvsp[-2].node)->type, "float") == 0 || strcmp((yyvsp[0].node)->type, "float") == 0) {
@@ -2192,11 +2191,11 @@ yyreduce:
             (yyval.node) = createNode("/", "int", (yyvsp[-2].node), (yyvsp[0].node));
         }
     }
-#line 2196 "parser.tab.c"
+#line 2195 "parser.tab.c"
     break;
 
   case 57: /* expression: expression MOD expression  */
-#line 691 "parser.y"
+#line 690 "parser.y"
                                 {
         // If either operand is float, result must be float
         if (strcmp((yyvsp[-2].node)->type, "float") == 0 || strcmp((yyvsp[0].node)->type, "float") == 0) {
@@ -2205,83 +2204,83 @@ yyreduce:
             (yyval.node) = createNode("%", "int", (yyvsp[-2].node), (yyvsp[0].node));
         }
     }
-#line 2209 "parser.tab.c"
+#line 2208 "parser.tab.c"
     break;
 
   case 58: /* expression: expression GT expression  */
-#line 699 "parser.y"
+#line 698 "parser.y"
                                {
         (yyval.node) = createNode(">", "int", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2217 "parser.tab.c"
+#line 2216 "parser.tab.c"
     break;
 
   case 59: /* expression: expression LT expression  */
-#line 702 "parser.y"
+#line 701 "parser.y"
                                {
         (yyval.node) = createNode("<", "int", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2225 "parser.tab.c"
+#line 2224 "parser.tab.c"
     break;
 
   case 60: /* expression: expression GE expression  */
-#line 705 "parser.y"
+#line 704 "parser.y"
                                {
         (yyval.node) = createNode(">=", "int", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2233 "parser.tab.c"
+#line 2232 "parser.tab.c"
     break;
 
   case 61: /* expression: expression LE expression  */
-#line 708 "parser.y"
+#line 707 "parser.y"
                                {
         (yyval.node) = createNode("<=", "int", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2241 "parser.tab.c"
+#line 2240 "parser.tab.c"
     break;
 
   case 62: /* expression: expression EQ expression  */
-#line 711 "parser.y"
+#line 710 "parser.y"
                                {
         (yyval.node) = createNode("==", "int", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2249 "parser.tab.c"
+#line 2248 "parser.tab.c"
     break;
 
   case 63: /* expression: expression AND expression  */
-#line 714 "parser.y"
+#line 713 "parser.y"
                                 {
         (yyval.node) = createNode("&&", "int", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2257 "parser.tab.c"
+#line 2256 "parser.tab.c"
     break;
 
   case 64: /* expression: expression OR expression  */
-#line 717 "parser.y"
+#line 716 "parser.y"
                                {
         (yyval.node) = createNode("||", "int", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2265 "parser.tab.c"
+#line 2264 "parser.tab.c"
     break;
 
   case 65: /* expression: NOT expression  */
-#line 720 "parser.y"
+#line 719 "parser.y"
                      {
         (yyval.node) = createNode("!", "int", (yyvsp[0].node), NULL);
     }
-#line 2273 "parser.tab.c"
+#line 2272 "parser.tab.c"
     break;
 
   case 66: /* expression: MINUS expression  */
-#line 723 "parser.y"
+#line 722 "parser.y"
                                     {
         (yyval.node) = createNode("unary-", "int", (yyvsp[0].node), NULL);
     }
-#line 2281 "parser.tab.c"
+#line 2280 "parser.tab.c"
     break;
 
   case 67: /* expression: IDENTIFIER  */
-#line 726 "parser.y"
+#line 725 "parser.y"
                  {
         int index = lookupSymbol((yyvsp[0].str), currentScope);
         if (index == -1) {
@@ -2292,11 +2291,11 @@ yyreduce:
             (yyval.node) = createNode((yyvsp[0].str), symbolTable[index].type, NULL, NULL);
         }
     }
-#line 2296 "parser.tab.c"
+#line 2295 "parser.tab.c"
     break;
 
   case 68: /* expression: NUMBER  */
-#line 736 "parser.y"
+#line 735 "parser.y"
              {
         // Check if number contains a decimal point
         if (strchr((yyvsp[0].str), '.') != NULL) {
@@ -2307,19 +2306,19 @@ yyreduce:
             (yyval.node)->value = atoi((yyvsp[0].str));
         }
     }
-#line 2311 "parser.tab.c"
+#line 2310 "parser.tab.c"
     break;
 
   case 69: /* expression: LPAREN expression RPAREN  */
-#line 746 "parser.y"
+#line 745 "parser.y"
                                { 
         (yyval.node) = (yyvsp[-1].node); 
     }
-#line 2319 "parser.tab.c"
+#line 2318 "parser.tab.c"
     break;
 
   case 70: /* expression: IDENTIFIER INCREMENT  */
-#line 749 "parser.y"
+#line 748 "parser.y"
                            {
         int index = lookupSymbol((yyvsp[-1].str), currentScope);
         if (index != -1) {
@@ -2330,11 +2329,11 @@ yyreduce:
             (yyval.node) = createNode("++", "int", createNode((yyvsp[-1].str), "int", NULL, NULL), NULL);
         }
     }
-#line 2334 "parser.tab.c"
+#line 2333 "parser.tab.c"
     break;
 
   case 71: /* expression: IDENTIFIER DECREMENT  */
-#line 759 "parser.y"
+#line 758 "parser.y"
                            {
         int index = lookupSymbol((yyvsp[-1].str), currentScope);
         if (index != -1) {
@@ -2345,11 +2344,11 @@ yyreduce:
             (yyval.node) = createNode("--", "int", createNode((yyvsp[-1].str), "int", NULL, NULL), NULL);
         }
     }
-#line 2349 "parser.tab.c"
+#line 2348 "parser.tab.c"
     break;
 
   case 72: /* expression: IDENTIFIER LBRACKET expression RBRACKET  */
-#line 769 "parser.y"
+#line 768 "parser.y"
                                               {
         int index = lookupSymbol((yyvsp[-3].str), currentScope);
         if (index == -1 || strcmp(symbolTable[index].type, "array") != 0) {
@@ -2364,11 +2363,11 @@ yyreduce:
                            createNode((yyvsp[-3].str), "array", (yyvsp[-1].node), NULL), NULL);
         }
     }
-#line 2368 "parser.tab.c"
+#line 2367 "parser.tab.c"
     break;
 
   case 73: /* expression: IDENTIFIER LBRACKET expression RBRACKET LBRACKET expression RBRACKET  */
-#line 783 "parser.y"
+#line 782 "parser.y"
                                                                            {
         int index = lookupSymbol((yyvsp[-6].str), currentScope);
         if (index == -1 || strcmp(symbolTable[index].type, "array") != 0) {
@@ -2384,29 +2383,29 @@ yyreduce:
                            createNode((yyvsp[-6].str), "array", indices, NULL), NULL);
         }
     }
-#line 2388 "parser.tab.c"
+#line 2387 "parser.tab.c"
     break;
 
   case 74: /* expression: function_call  */
-#line 798 "parser.y"
+#line 797 "parser.y"
                     { (yyval.node) = (yyvsp[0].node); }
-#line 2394 "parser.tab.c"
+#line 2393 "parser.tab.c"
     break;
 
   case 75: /* elif_chain: elif_chain elif_clause  */
-#line 803 "parser.y"
+#line 802 "parser.y"
                            { (yyval.node) = createNode("ElifChain", "control", (yyvsp[-1].node), (yyvsp[0].node)); }
-#line 2400 "parser.tab.c"
+#line 2399 "parser.tab.c"
     break;
 
   case 76: /* elif_chain: elif_clause  */
-#line 804 "parser.y"
+#line 803 "parser.y"
                   { (yyval.node) = (yyvsp[0].node); }
-#line 2406 "parser.tab.c"
+#line 2405 "parser.tab.c"
     break;
 
   case 77: /* elif_clause: KEYWORD LPAREN expression RPAREN matched_stmt  */
-#line 808 "parser.y"
+#line 807 "parser.y"
                                                   {
         if (strcmp((yyvsp[-4].str), "elif_RP") == 0) {
             (yyval.node) = createNode("Elif", "control", (yyvsp[-2].node), (yyvsp[0].node));
@@ -2415,11 +2414,11 @@ yyreduce:
             (yyval.node) = NULL;
         }
     }
-#line 2419 "parser.tab.c"
+#line 2418 "parser.tab.c"
     break;
 
   case 78: /* function_call: IDENTIFIER LPAREN arg_list RPAREN  */
-#line 819 "parser.y"
+#line 818 "parser.y"
                                       {
         int index = lookupSymbol((yyvsp[-3].str), currentScope);
         
@@ -2465,35 +2464,35 @@ yyreduce:
             }
         }
     }
-#line 2469 "parser.tab.c"
+#line 2468 "parser.tab.c"
     break;
 
   case 79: /* arg_list: arg_list COMMA expression  */
-#line 867 "parser.y"
+#line 866 "parser.y"
                               { 
         (yyval.node) = createNode("Arguments", "args", (yyvsp[-2].node), (yyvsp[0].node)); 
     }
-#line 2477 "parser.tab.c"
+#line 2476 "parser.tab.c"
     break;
 
   case 80: /* arg_list: expression  */
-#line 870 "parser.y"
+#line 869 "parser.y"
                  { 
         (yyval.node) = createNode("Argument", "arg", (yyvsp[0].node), NULL); 
     }
-#line 2485 "parser.tab.c"
+#line 2484 "parser.tab.c"
     break;
 
   case 81: /* arg_list: %empty  */
-#line 873 "parser.y"
+#line 872 "parser.y"
                   { 
         (yyval.node) = NULL; 
     }
-#line 2493 "parser.tab.c"
+#line 2492 "parser.tab.c"
     break;
 
 
-#line 2497 "parser.tab.c"
+#line 2496 "parser.tab.c"
 
       default: break;
     }
@@ -2686,7 +2685,7 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 878 "parser.y"
+#line 877 "parser.y"
 
 
 // Move the countArguments function to the C section after the grammar

@@ -421,20 +421,24 @@ statement:
         }
     }
     | IDENTIFIER LBRACKET expression RBRACKET ASSIGN expression SEMICOLON {
-        int array_idx = lookupSymbol($1, currentScope);
-        if (array_idx == -1 || strcmp(symbolTable[array_idx].type, "array") != 0) {
+        int index = lookupSymbol($1, currentScope);
+        if (index == -1 || strcmp(symbolTable[index].type, "array") != 0) {
             yyerror("Invalid array access");
             $$ = createNode("Error", "error", NULL, NULL);
         } else {
-            // Check if index expression is a float type
-            if (strcmp($3->type, "float") == 0) {
-                printf("Semantic Error: Array index must be integer, not float\n");
-                $$ = createNode("Error", "error", NULL, NULL);
-            } else {
-                Node* arrayNode = createNode($1, "array", 
-                                  createNode("Index", "int", $3, NULL), NULL);
-                $$ = createNode("ArrayAssignment", "int", arrayNode, $6);
-            }
+            $$ = createNode("ArrayAssignment", "int", 
+                           createNode($1, "array", $3, NULL), $6);
+        }
+    }
+    | IDENTIFIER LBRACKET expression RBRACKET LBRACKET expression RBRACKET ASSIGN expression SEMICOLON {
+        int index = lookupSymbol($1, currentScope);
+        if (index == -1 || strcmp(symbolTable[index].type, "array") != 0) {
+            yyerror("Invalid array access");
+            $$ = createNode("Error", "error", NULL, NULL);
+        } else {
+            Node* indices = createNode("Indices", "int", $3, $6);
+            $$ = createNode("Array2DAssignment", "int",
+                           createNode($1, "array", indices, NULL), $9);
         }
     }
     | matched_stmt { $$ = $1; }
