@@ -94,6 +94,7 @@ typedef struct Symbol {
     char *type; // e.g., "int", "float", "array", "function"
     int scope;
     int array_dimensions; // Number of dimensions for arrays
+    int function_id;     // For function overload management
 } Symbol;
 
 Symbol symbolTable[100];
@@ -112,18 +113,22 @@ typedef struct {
     char* returnType;
     Parameter params[10];  // Allow up to 10 parameters
     int paramCount;
+    int id;               // Unique identifier for this function
 } Function;
 
 Function functionTable[50];  // Store up to 50 functions
 int functionCount = 0;
+int nextFunctionId = 1;     // For generating unique function IDs
 
 // Add these declarations before the main parser code:
 char* paramNames[10];
 char* paramTypes[10];
 int paramCount = 0;
 
-// Add this function declaration before it's used
+// Add prototype for findMatchingFunction
+int findMatchingFunction(char* name, Node* argList);
 int countArguments(Node* argList);
+int lookupFunctionOverload(char* name, char* returnType, char** paramTypes, int paramCount);
 
 Node *createNode(char *name, char *type, Node *left, Node *right) {
     Node *node = (Node *)malloc(sizeof(Node));
@@ -152,31 +157,127 @@ int lookupSymbol(char *name, int scope) {
     return -1;
 }
 
+// Function to add a function to the function table allowing overloading
+int addFunction(char* name, char* returnType) {
+    // Check if there's enough space in the function table
+    if (functionCount >= 50) {
+        printf("Semantic Error: Too many functions defined\n");
+        return -1;
+    }
+    
+    // We allow multiple functions with the same name (overloading)
+    // but need to collect parameter types first
+    char* paramTypesCopy[10];
+    for (int i = 0; i < paramCount; i++) {
+        paramTypesCopy[i] = strdup(paramTypes[i]);
+    }
+    
+    // Check if this exact function signature already exists
+    int existingFunc = lookupFunctionOverload(name, returnType, paramTypesCopy, paramCount);
+    if (existingFunc >= 0) {
+        printf("Semantic Error: Function '%s' with identical signature already exists\n", name);
+        
+        // Clean up temporary parameter types
+        for (int i = 0; i < paramCount; i++) {
+            free(paramTypesCopy[i]);
+        }
+        
+        return -1;
+    }
+    
+    // Clean up temporary parameter types
+    for (int i = 0; i < paramCount; i++) {
+        free(paramTypesCopy[i]);
+    }
+    
+    // This is a new function signature - add it
+    functionTable[functionCount].name = strdup(name);
+    functionTable[functionCount].returnType = strdup(returnType);
+    functionTable[functionCount].paramCount = 0;
+    functionTable[functionCount].id = nextFunctionId++;
+    return functionCount++;
+}
+
+// Look up a function with exact signature
+int lookupFunctionOverload(char* name, char* returnType, char** paramTypes, int paramCount) {
+    for (int i = 0; i < functionCount; i++) {
+        if (strcmp(functionTable[i].name, name) == 0 && 
+            strcmp(functionTable[i].returnType, returnType) == 0 &&
+            functionTable[i].paramCount == paramCount) {
+            
+            // Check each parameter type
+            int match = 1;
+            for (int j = 0; j < paramCount; j++) {
+                if (strcmp(functionTable[i].params[j].type, paramTypes[j]) != 0) {
+                    match = 0;
+                    break;
+                }
+            }
+            
+            if (match) {
+                return i; // Found matching function
+            }
+        }
+    }
+    return -1; // No match found
+}
+
+// Modified to handle function overloads
 void addSymbol(char *name, char *type, int scope, int array_dimensions) {
-    if (lookupSymbol(name, scope) != -1) {
-        yyerror("Duplicate declaration");
-    } else {
+    // Special handling for function names - they can be overloaded
+    if (strcmp(type, "function") == 0) {
         symbolTable[symbolCount].name = strdup(name);
         symbolTable[symbolCount].type = strdup(type);
         symbolTable[symbolCount].scope = scope;
         symbolTable[symbolCount].array_dimensions = array_dimensions;
+        symbolTable[symbolCount].function_id = nextFunctionId - 1; // Associate with latest function
         symbolCount++;
+        return;
     }
+    
+    // For parameters, add scope+function_id to make them unique
+    if (scope > 1) { // Parameters are typically at scope 2+
+        // Don't check for duplicates - parameters can have same name in different functions
+        symbolTable[symbolCount].name = strdup(name);
+        symbolTable[symbolCount].type = strdup(type);
+        symbolTable[symbolCount].scope = scope;
+        symbolTable[symbolCount].array_dimensions = array_dimensions;
+        symbolTable[symbolCount].function_id = nextFunctionId - 1; // Associate with current function
+        symbolCount++;
+        return;
+    }
+    
+    // Regular variables - check for duplicates at the same scope
+    for (int i = 0; i < symbolCount; i++) {
+        if (strcmp(symbolTable[i].name, name) == 0 && symbolTable[i].scope == scope) {
+            yyerror("Duplicate declaration");
+            return;
+        }
+    }
+    
+    symbolTable[symbolCount].name = strdup(name);
+    symbolTable[symbolCount].type = strdup(type);
+    symbolTable[symbolCount].scope = scope;
+    symbolTable[symbolCount].array_dimensions = array_dimensions;
+    symbolTable[symbolCount].function_id = 0; // Not a function
+    symbolCount++;
 }
 
+// Modified to include function_id in the output
 void printSymbolTable() {
     printf("\nSymbol Table:\n");
-    printf("+----------------+----------------+--------+----------------+\n");
-    printf("| Name           | Type           | Scope  | Array Dim      |\n");
-    printf("+----------------+----------------+--------+----------------+\n");
+    printf("+----------------+----------------+--------+----------------+--------+\n");
+    printf("| Name           | Type           | Scope  | Array Dim      | Func ID|\n");
+    printf("+----------------+----------------+--------+----------------+--------+\n");
     for (int i = 0; i < symbolCount; i++) {
-        printf("| %-14s | %-14s | %-6d | %-14d |\n",
+        printf("| %-14s | %-14s | %-6d | %-14d | %-6d |\n",
                symbolTable[i].name,
                symbolTable[i].type,
                symbolTable[i].scope,
-               symbolTable[i].array_dimensions);
+               symbolTable[i].array_dimensions,
+               symbolTable[i].function_id);
     }
-    printf("+----------------+----------------+--------+----------------+\n");
+    printf("+----------------+----------------+--------+----------------+--------+\n");
 }
 
 // Function to get type from keyword by removing _RP suffix
@@ -251,22 +352,6 @@ int isAssignmentCompatible(const char* targetType, const char* valueType) {
     return 0;
 }
 
-// Function to add a function to the function table
-int addFunction(char* name, char* returnType) {
-    // Check if function already exists
-    for (int i = 0; i < functionCount; i++) {
-        if (strcmp(functionTable[i].name, name) == 0) {
-            printf("Semantic Error: Function '%s' already declared\n", name);
-            return -1;
-        }
-    }
-    
-    functionTable[functionCount].name = strdup(name);
-    functionTable[functionCount].returnType = strdup(returnType);
-    functionTable[functionCount].paramCount = 0;
-    return functionCount++;
-}
-
 // Function to add a parameter to a function
 void addParameter(int funcIndex, char* name, char* type) {
     int paramIdx = functionTable[funcIndex].paramCount;
@@ -292,13 +377,14 @@ int lookupFunction(char* name) {
 
 // Function to print the function table - simpler approach with proper border
 void printFunctionTable() {
-    printf("\nFunction Table:\n");
-    printf("+----------------+----------------+-------------------------+\n");
-    printf("| Name           | Return Type    | Parameters              |\n");
-    printf("+----------------+----------------+-------------------------+\n");
+    printf("\nFunction Table (with Overloading):\n");
+    printf("+------+----------------+----------------+-------------------------+\n");
+    printf("| ID   | Name           | Return Type    | Parameters              |\n");
+    printf("+------+----------------+----------------+-------------------------+\n");
     
     for (int i = 0; i < functionCount; i++) {
-        printf("| %-14s | %-14s | ", 
+        printf("| %-4d | %-14s | %-14s | ", 
+               functionTable[i].id,
                functionTable[i].name, 
                functionTable[i].returnType);
         
@@ -328,7 +414,7 @@ void printFunctionTable() {
         }
     }
     
-    printf("+----------------+----------------+-------------------------+\n");
+    printf("+------+----------------+----------------+-------------------------+\n");
 }
 
 // Add to your printTree function to include function table
@@ -345,7 +431,7 @@ void printAST() {
     printFunctionTable();
 }
 
-#line 349 "parser.tab.c"
+#line 435 "parser.tab.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -831,15 +917,15 @@ static const yytype_int8 yytranslate[] =
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_int16 yyrline[] =
 {
-       0,   304,   304,   313,   313,   314,   314,   318,   319,   320,
-     321,   325,   353,   356,   359,   365,   384,   394,   402,   411,
-     423,   433,   444,   445,   446,   447,   448,   449,   464,   468,
-     478,   489,   498,   506,   510,   520,   530,   540,   547,   560,
-     569,   573,   583,   593,   597,   608,   609,   613,   622,   634,
-     637,   643,   647,   658,   666,   674,   682,   690,   698,   701,
-     704,   707,   710,   713,   716,   719,   722,   725,   735,   745,
-     748,   758,   768,   782,   797,   802,   803,   807,   818,   866,
-     869,   872
+       0,   390,   390,   399,   399,   400,   400,   404,   405,   406,
+     407,   411,   439,   442,   445,   451,   470,   480,   488,   497,
+     509,   519,   530,   531,   532,   533,   534,   535,   550,   554,
+     564,   575,   584,   592,   596,   606,   616,   626,   633,   646,
+     655,   659,   669,   679,   683,   694,   695,   699,   708,   720,
+     723,   729,   733,   744,   752,   760,   768,   776,   784,   787,
+     790,   793,   796,   799,   802,   805,   808,   811,   821,   831,
+     834,   844,   854,   868,   883,   888,   889,   893,   904,   936,
+     939,   942
 };
 #endif
 
@@ -1589,66 +1675,66 @@ yyreduce:
   switch (yyn)
     {
   case 2: /* program: block  */
-#line 304 "parser.y"
+#line 390 "parser.y"
           {
         rootNode = (yyvsp[0].node);
         // Print lexer table footer
         fprintf(stderr, "+-----------------+------------------+\n\n");
         printAST();
     }
-#line 1600 "parser.tab.c"
+#line 1686 "parser.tab.c"
     break;
 
   case 3: /* $@1: %empty  */
-#line 313 "parser.y"
+#line 399 "parser.y"
            { currentScope++; }
-#line 1606 "parser.tab.c"
+#line 1692 "parser.tab.c"
     break;
 
   case 4: /* block: LBRACE $@1 statements RBRACE  */
-#line 313 "parser.y"
+#line 399 "parser.y"
                                                  { currentScope--; (yyval.node) = (yyvsp[-1].node); }
-#line 1612 "parser.tab.c"
+#line 1698 "parser.tab.c"
     break;
 
   case 5: /* $@2: %empty  */
-#line 314 "parser.y"
+#line 400 "parser.y"
              { currentScope++; }
-#line 1618 "parser.tab.c"
+#line 1704 "parser.tab.c"
     break;
 
   case 6: /* block: LBRACE $@2 RBRACE  */
-#line 314 "parser.y"
+#line 400 "parser.y"
                                         { currentScope--; (yyval.node) = createNode("EmptyBlock", "block", NULL, NULL); }
-#line 1624 "parser.tab.c"
+#line 1710 "parser.tab.c"
     break;
 
   case 7: /* statements: statements statement  */
-#line 318 "parser.y"
+#line 404 "parser.y"
                          { (yyval.node) = createNode("Statements", "block", (yyvsp[-1].node), (yyvsp[0].node)); }
-#line 1630 "parser.tab.c"
+#line 1716 "parser.tab.c"
     break;
 
   case 8: /* statements: statements function_decl  */
-#line 319 "parser.y"
+#line 405 "parser.y"
                                { (yyval.node) = createNode("Statements", "block", (yyvsp[-1].node), (yyvsp[0].node)); }
-#line 1636 "parser.tab.c"
+#line 1722 "parser.tab.c"
     break;
 
   case 9: /* statements: statement  */
-#line 320 "parser.y"
+#line 406 "parser.y"
                 { (yyval.node) = (yyvsp[0].node); }
-#line 1642 "parser.tab.c"
+#line 1728 "parser.tab.c"
     break;
 
   case 10: /* statements: function_decl  */
-#line 321 "parser.y"
+#line 407 "parser.y"
                     { (yyval.node) = (yyvsp[0].node); }
-#line 1648 "parser.tab.c"
+#line 1734 "parser.tab.c"
     break;
 
   case 11: /* function_decl: KEYWORD IDENTIFIER LPAREN param_list RPAREN block  */
-#line 325 "parser.y"
+#line 411 "parser.y"
                                                       {
         char* returnType = getTypeFromKeyword((yyvsp[-5].str));
         
@@ -1674,35 +1760,35 @@ yyreduce:
         }
         free(returnType);
     }
-#line 1678 "parser.tab.c"
+#line 1764 "parser.tab.c"
     break;
 
   case 12: /* param_list: param_list COMMA param  */
-#line 353 "parser.y"
+#line 439 "parser.y"
                            { 
         (yyval.node) = createNode("Parameters", "params", (yyvsp[-2].node), (yyvsp[0].node)); 
     }
-#line 1686 "parser.tab.c"
+#line 1772 "parser.tab.c"
     break;
 
   case 13: /* param_list: param  */
-#line 356 "parser.y"
+#line 442 "parser.y"
             { 
         (yyval.node) = (yyvsp[0].node); 
     }
-#line 1694 "parser.tab.c"
+#line 1780 "parser.tab.c"
     break;
 
   case 14: /* param_list: %empty  */
-#line 359 "parser.y"
+#line 445 "parser.y"
                   { 
         (yyval.node) = NULL; 
     }
-#line 1702 "parser.tab.c"
+#line 1788 "parser.tab.c"
     break;
 
   case 15: /* param: KEYWORD IDENTIFIER  */
-#line 365 "parser.y"
+#line 451 "parser.y"
                        {
         char* type = getTypeFromKeyword((yyvsp[-1].str));
         
@@ -1719,11 +1805,11 @@ yyreduce:
         (yyval.node) = createNode("Parameter", type, createNode((yyvsp[0].str), type, NULL, NULL), NULL);
         free(type);
     }
-#line 1723 "parser.tab.c"
+#line 1809 "parser.tab.c"
     break;
 
   case 16: /* statement: KEYWORD IDENTIFIER ASSIGN expression SEMICOLON  */
-#line 384 "parser.y"
+#line 470 "parser.y"
                                                    {
         char* type = getTypeFromKeyword((yyvsp[-4].str));
         if (isAssignmentCompatible(type, (yyvsp[-1].node)->type)) {
@@ -1734,11 +1820,11 @@ yyreduce:
         }
         free(type);
     }
-#line 1738 "parser.tab.c"
+#line 1824 "parser.tab.c"
     break;
 
   case 17: /* statement: KEYWORD IDENTIFIER LBRACKET expression RBRACKET SEMICOLON  */
-#line 394 "parser.y"
+#line 480 "parser.y"
                                                                 {
         char* type = getTypeFromKeyword((yyvsp[-5].str));
         // Store as array type and track dimensions
@@ -1747,11 +1833,11 @@ yyreduce:
                        createNode((yyvsp[-4].str), "array", NULL, NULL), (yyvsp[-2].node));
         free(type);
     }
-#line 1751 "parser.tab.c"
+#line 1837 "parser.tab.c"
     break;
 
   case 18: /* statement: KEYWORD IDENTIFIER LBRACKET expression RBRACKET LBRACKET expression RBRACKET SEMICOLON  */
-#line 402 "parser.y"
+#line 488 "parser.y"
                                                                                              {
         char* type = getTypeFromKeyword((yyvsp[-8].str));
         // For 2D arrays, store dimensions count as 2
@@ -1761,11 +1847,11 @@ yyreduce:
                        createNode((yyvsp[-7].str), "array", NULL, NULL), dimensions);
         free(type);
     }
-#line 1765 "parser.tab.c"
+#line 1851 "parser.tab.c"
     break;
 
   case 19: /* statement: IDENTIFIER ASSIGN expression SEMICOLON  */
-#line 411 "parser.y"
+#line 497 "parser.y"
                                              {
         int index = lookupSymbol((yyvsp[-3].str), currentScope);
         if (index == -1) {
@@ -1778,11 +1864,11 @@ yyreduce:
             (yyval.node) = createNode("Error", "error", NULL, NULL);
         }
     }
-#line 1782 "parser.tab.c"
+#line 1868 "parser.tab.c"
     break;
 
   case 20: /* statement: IDENTIFIER LBRACKET expression RBRACKET ASSIGN expression SEMICOLON  */
-#line 423 "parser.y"
+#line 509 "parser.y"
                                                                           {
         int index = lookupSymbol((yyvsp[-6].str), currentScope);
         if (index == -1 || strcmp(symbolTable[index].type, "array") != 0) {
@@ -1793,11 +1879,11 @@ yyreduce:
                            createNode((yyvsp[-6].str), "array", (yyvsp[-4].node), NULL), (yyvsp[-1].node));
         }
     }
-#line 1797 "parser.tab.c"
+#line 1883 "parser.tab.c"
     break;
 
   case 21: /* statement: IDENTIFIER LBRACKET expression RBRACKET LBRACKET expression RBRACKET ASSIGN expression SEMICOLON  */
-#line 433 "parser.y"
+#line 519 "parser.y"
                                                                                                        {
         int index = lookupSymbol((yyvsp[-9].str), currentScope);
         if (index == -1 || strcmp(symbolTable[index].type, "array") != 0) {
@@ -1809,41 +1895,41 @@ yyreduce:
                            createNode((yyvsp[-9].str), "array", indices, NULL), (yyvsp[-1].node));
         }
     }
-#line 1813 "parser.tab.c"
+#line 1899 "parser.tab.c"
     break;
 
   case 22: /* statement: matched_stmt  */
-#line 444 "parser.y"
+#line 530 "parser.y"
                    { (yyval.node) = (yyvsp[0].node); }
-#line 1819 "parser.tab.c"
+#line 1905 "parser.tab.c"
     break;
 
   case 23: /* statement: unmatched_stmt  */
-#line 445 "parser.y"
+#line 531 "parser.y"
                      { (yyval.node) = (yyvsp[0].node); }
-#line 1825 "parser.tab.c"
+#line 1911 "parser.tab.c"
     break;
 
   case 24: /* statement: for_statement  */
-#line 446 "parser.y"
+#line 532 "parser.y"
                     { (yyval.node) = (yyvsp[0].node); }
-#line 1831 "parser.tab.c"
+#line 1917 "parser.tab.c"
     break;
 
   case 25: /* statement: switch_statement  */
-#line 447 "parser.y"
+#line 533 "parser.y"
                        { (yyval.node) = (yyvsp[0].node); }
-#line 1837 "parser.tab.c"
+#line 1923 "parser.tab.c"
     break;
 
   case 26: /* statement: expression SEMICOLON  */
-#line 448 "parser.y"
+#line 534 "parser.y"
                            { (yyval.node) = (yyvsp[-1].node); }
-#line 1843 "parser.tab.c"
+#line 1929 "parser.tab.c"
     break;
 
   case 27: /* statement: KEYWORD IDENTIFIER SEMICOLON  */
-#line 449 "parser.y"
+#line 535 "parser.y"
                                    {
         if (strcmp((yyvsp[-2].str), "return_RP") == 0) {
             int index = lookupSymbol((yyvsp[-1].str), currentScope);
@@ -1859,17 +1945,17 @@ yyreduce:
             (yyval.node) = createNode("Error", "error", NULL, NULL);
         }
     }
-#line 1863 "parser.tab.c"
+#line 1949 "parser.tab.c"
     break;
 
   case 28: /* statement: function_call SEMICOLON  */
-#line 464 "parser.y"
+#line 550 "parser.y"
                               { (yyval.node) = (yyvsp[-1].node); }
-#line 1869 "parser.tab.c"
+#line 1955 "parser.tab.c"
     break;
 
   case 29: /* matched_stmt: KEYWORD LPAREN expression RPAREN matched_stmt KEYWORD matched_stmt  */
-#line 468 "parser.y"
+#line 554 "parser.y"
                                                                        {
         if (strcmp((yyvsp[-6].str), "if_RP") == 0 && strcmp((yyvsp[-1].str), "else_RP") == 0) {
             Node *if_node = createNode("If", "control", (yyvsp[-4].node), (yyvsp[-2].node));
@@ -1880,11 +1966,11 @@ yyreduce:
             (yyval.node) = NULL;
         }
     }
-#line 1884 "parser.tab.c"
+#line 1970 "parser.tab.c"
     break;
 
   case 30: /* matched_stmt: KEYWORD LPAREN expression RPAREN matched_stmt elif_chain KEYWORD matched_stmt  */
-#line 478 "parser.y"
+#line 564 "parser.y"
                                                                                     {
         if (strcmp((yyvsp[-7].str), "if_RP") == 0 && strcmp((yyvsp[-1].str), "else_RP") == 0) {
             Node *if_node = createNode("If", "control", (yyvsp[-5].node), (yyvsp[-3].node));
@@ -1896,11 +1982,11 @@ yyreduce:
             (yyval.node) = NULL;
         }
     }
-#line 1900 "parser.tab.c"
+#line 1986 "parser.tab.c"
     break;
 
   case 31: /* matched_stmt: KEYWORD LPAREN expression RPAREN matched_stmt elif_chain  */
-#line 489 "parser.y"
+#line 575 "parser.y"
                                                                {
         if (strcmp((yyvsp[-5].str), "if_RP") == 0) {
             Node *if_node = createNode("If", "control", (yyvsp[-3].node), (yyvsp[-1].node));
@@ -1910,11 +1996,11 @@ yyreduce:
             (yyval.node) = NULL;
         }
     }
-#line 1914 "parser.tab.c"
+#line 2000 "parser.tab.c"
     break;
 
   case 32: /* matched_stmt: KEYWORD LPAREN expression RPAREN matched_stmt  */
-#line 498 "parser.y"
+#line 584 "parser.y"
                                                     {
         if (strcmp((yyvsp[-4].str), "while_RP") == 0) {
             (yyval.node) = createNode("While", "control", (yyvsp[-2].node), (yyvsp[0].node));
@@ -1923,17 +2009,17 @@ yyreduce:
             (yyval.node) = NULL;
         }
     }
-#line 1927 "parser.tab.c"
+#line 2013 "parser.tab.c"
     break;
 
   case 33: /* matched_stmt: block  */
-#line 506 "parser.y"
+#line 592 "parser.y"
             { (yyval.node) = (yyvsp[0].node); }
-#line 1933 "parser.tab.c"
+#line 2019 "parser.tab.c"
     break;
 
   case 34: /* unmatched_stmt: KEYWORD LPAREN expression RPAREN statement  */
-#line 510 "parser.y"
+#line 596 "parser.y"
                                                {
         if (strcmp((yyvsp[-4].str), "if_RP") == 0) {
             (yyval.node) = createNode("If", "control", (yyvsp[-2].node), (yyvsp[0].node));
@@ -1944,11 +2030,11 @@ yyreduce:
             (yyval.node) = NULL;
         }
     }
-#line 1948 "parser.tab.c"
+#line 2034 "parser.tab.c"
     break;
 
   case 35: /* unmatched_stmt: KEYWORD LPAREN expression RPAREN matched_stmt KEYWORD unmatched_stmt  */
-#line 520 "parser.y"
+#line 606 "parser.y"
                                                                            {
         if (strcmp((yyvsp[-6].str), "if_RP") == 0 && strcmp((yyvsp[-1].str), "else_RP") == 0) {
             Node *if_node = createNode("If", "control", (yyvsp[-4].node), (yyvsp[-2].node));
@@ -1959,11 +2045,11 @@ yyreduce:
             (yyval.node) = NULL;
         }
     }
-#line 1963 "parser.tab.c"
+#line 2049 "parser.tab.c"
     break;
 
   case 36: /* unmatched_stmt: KEYWORD LPAREN expression RPAREN matched_stmt elif_chain KEYWORD unmatched_stmt  */
-#line 530 "parser.y"
+#line 616 "parser.y"
                                                                                       {
         if (strcmp((yyvsp[-7].str), "if_RP") == 0 && strcmp((yyvsp[-1].str), "else_RP") == 0) {
             Node *if_node = createNode("If", "control", (yyvsp[-5].node), (yyvsp[-3].node));
@@ -1974,20 +2060,20 @@ yyreduce:
             (yyval.node) = NULL;
         }
     }
-#line 1978 "parser.tab.c"
+#line 2064 "parser.tab.c"
     break;
 
   case 37: /* unmatched_stmt: KEYWORD LPAREN error RPAREN statement  */
-#line 540 "parser.y"
+#line 626 "parser.y"
                                             {
         yyerror("Expected expression in if statement");
         (yyval.node) = NULL;
     }
-#line 1987 "parser.tab.c"
+#line 2073 "parser.tab.c"
     break;
 
   case 38: /* for_statement: KEYWORD LPAREN declaration SEMICOLON condition SEMICOLON increment_expr RPAREN statement  */
-#line 547 "parser.y"
+#line 633 "parser.y"
                                                                                              {
         if (strcmp((yyvsp[-8].str), "for_RP") == 0) {
             (yyval.node) = createNode("For", "control", (yyvsp[-6].node),
@@ -1998,28 +2084,28 @@ yyreduce:
             (yyval.node) = NULL;
         }
     }
-#line 2002 "parser.tab.c"
+#line 2088 "parser.tab.c"
     break;
 
   case 39: /* declaration: KEYWORD IDENTIFIER ASSIGN expression  */
-#line 560 "parser.y"
+#line 646 "parser.y"
                                          {
         char* type = getTypeFromKeyword((yyvsp[-3].str));
         addSymbol((yyvsp[-2].str), type, currentScope, 0);
         (yyval.node) = createNode("Initialize", type, createNode((yyvsp[-2].str), type, NULL, NULL), (yyvsp[0].node));
         free(type);
     }
-#line 2013 "parser.tab.c"
+#line 2099 "parser.tab.c"
     break;
 
   case 40: /* condition: expression  */
-#line 569 "parser.y"
+#line 655 "parser.y"
                { (yyval.node) = (yyvsp[0].node); }
-#line 2019 "parser.tab.c"
+#line 2105 "parser.tab.c"
     break;
 
   case 41: /* increment_expr: IDENTIFIER INCREMENT  */
-#line 573 "parser.y"
+#line 659 "parser.y"
                          {
         int index = lookupSymbol((yyvsp[-1].str), currentScope);
         if (index != -1) {
@@ -2030,11 +2116,11 @@ yyreduce:
             (yyval.node) = NULL;
         }
     }
-#line 2034 "parser.tab.c"
+#line 2120 "parser.tab.c"
     break;
 
   case 42: /* increment_expr: IDENTIFIER DECREMENT  */
-#line 583 "parser.y"
+#line 669 "parser.y"
                            {
         int index = lookupSymbol((yyvsp[-1].str), currentScope);
         if (index != -1) {
@@ -2045,17 +2131,17 @@ yyreduce:
             (yyval.node) = NULL;
         }
     }
-#line 2049 "parser.tab.c"
+#line 2135 "parser.tab.c"
     break;
 
   case 43: /* increment_expr: expression  */
-#line 593 "parser.y"
+#line 679 "parser.y"
                  { (yyval.node) = (yyvsp[0].node); }
-#line 2055 "parser.tab.c"
+#line 2141 "parser.tab.c"
     break;
 
   case 44: /* switch_statement: KEYWORD LPAREN expression RPAREN LBRACE cases RBRACE  */
-#line 597 "parser.y"
+#line 683 "parser.y"
                                                          {
         if (strcmp((yyvsp[-6].str), "switch_RP") == 0) {
             (yyval.node) = createNode("Switch", "control", (yyvsp[-4].node), (yyvsp[-1].node));
@@ -2064,23 +2150,23 @@ yyreduce:
             (yyval.node) = NULL;
         }
     }
-#line 2068 "parser.tab.c"
+#line 2154 "parser.tab.c"
     break;
 
   case 45: /* cases: cases case_statement  */
-#line 608 "parser.y"
+#line 694 "parser.y"
                          { (yyval.node) = createNode("Cases", "block", (yyvsp[-1].node), (yyvsp[0].node)); }
-#line 2074 "parser.tab.c"
+#line 2160 "parser.tab.c"
     break;
 
   case 46: /* cases: case_statement  */
-#line 609 "parser.y"
+#line 695 "parser.y"
                      { (yyval.node) = (yyvsp[0].node); }
-#line 2080 "parser.tab.c"
+#line 2166 "parser.tab.c"
     break;
 
   case 47: /* case_statement: KEYWORD NUMBER COLON case_statements break_statement  */
-#line 613 "parser.y"
+#line 699 "parser.y"
                                                          {
         if (strcmp((yyvsp[-4].str), "case_RP") == 0) {
             Node* caseBody = createNode("CaseBody", "block", (yyvsp[-1].node), (yyvsp[0].node));
@@ -2090,11 +2176,11 @@ yyreduce:
             (yyval.node) = NULL;
         }
     }
-#line 2094 "parser.tab.c"
+#line 2180 "parser.tab.c"
     break;
 
   case 48: /* case_statement: KEYWORD COLON case_statements break_statement  */
-#line 622 "parser.y"
+#line 708 "parser.y"
                                                     {
         if (strcmp((yyvsp[-3].str), "default_RP") == 0) {
             Node* defaultBody = createNode("DefaultBody", "block", (yyvsp[-1].node), (yyvsp[0].node));
@@ -2104,33 +2190,33 @@ yyreduce:
             (yyval.node) = NULL;
         }
     }
-#line 2108 "parser.tab.c"
+#line 2194 "parser.tab.c"
     break;
 
   case 49: /* case_statements: case_statements case_statement_item  */
-#line 634 "parser.y"
+#line 720 "parser.y"
                                         { 
         (yyval.node) = createNode("CaseStatements", "block", (yyvsp[-1].node), (yyvsp[0].node)); 
     }
-#line 2116 "parser.tab.c"
+#line 2202 "parser.tab.c"
     break;
 
   case 50: /* case_statements: case_statement_item  */
-#line 637 "parser.y"
+#line 723 "parser.y"
                           { 
         (yyval.node) = (yyvsp[0].node); 
     }
-#line 2124 "parser.tab.c"
+#line 2210 "parser.tab.c"
     break;
 
   case 51: /* case_statement_item: statement  */
-#line 643 "parser.y"
+#line 729 "parser.y"
               { (yyval.node) = (yyvsp[0].node); }
-#line 2130 "parser.tab.c"
+#line 2216 "parser.tab.c"
     break;
 
   case 52: /* break_statement: KEYWORD SEMICOLON  */
-#line 647 "parser.y"
+#line 733 "parser.y"
                       {
         if (strcmp((yyvsp[-1].str), "break_RP") == 0) {
             (yyval.node) = createNode("Break", "control", NULL, NULL);
@@ -2139,11 +2225,11 @@ yyreduce:
             (yyval.node) = NULL;
         }
     }
-#line 2143 "parser.tab.c"
+#line 2229 "parser.tab.c"
     break;
 
   case 53: /* expression: expression PLUS expression  */
-#line 658 "parser.y"
+#line 744 "parser.y"
                                {
         // If either operand is float, result must be float
         if (strcmp((yyvsp[-2].node)->type, "float") == 0 || strcmp((yyvsp[0].node)->type, "float") == 0) {
@@ -2152,11 +2238,11 @@ yyreduce:
             (yyval.node) = createNode("+", "int", (yyvsp[-2].node), (yyvsp[0].node));
         }
     }
-#line 2156 "parser.tab.c"
+#line 2242 "parser.tab.c"
     break;
 
   case 54: /* expression: expression MINUS expression  */
-#line 666 "parser.y"
+#line 752 "parser.y"
                                   {
         // If either operand is float, result must be float
         if (strcmp((yyvsp[-2].node)->type, "float") == 0 || strcmp((yyvsp[0].node)->type, "float") == 0) {
@@ -2165,11 +2251,11 @@ yyreduce:
             (yyval.node) = createNode("-", "int", (yyvsp[-2].node), (yyvsp[0].node));
         }
     }
-#line 2169 "parser.tab.c"
+#line 2255 "parser.tab.c"
     break;
 
   case 55: /* expression: expression MULT expression  */
-#line 674 "parser.y"
+#line 760 "parser.y"
                                  {
         // If either operand is float, result must be float
         if (strcmp((yyvsp[-2].node)->type, "float") == 0 || strcmp((yyvsp[0].node)->type, "float") == 0) {
@@ -2178,11 +2264,11 @@ yyreduce:
             (yyval.node) = createNode("*", "int", (yyvsp[-2].node), (yyvsp[0].node));
         }
     }
-#line 2182 "parser.tab.c"
+#line 2268 "parser.tab.c"
     break;
 
   case 56: /* expression: expression DIV expression  */
-#line 682 "parser.y"
+#line 768 "parser.y"
                                 {
         // If either operand is float, result must be float
         if (strcmp((yyvsp[-2].node)->type, "float") == 0 || strcmp((yyvsp[0].node)->type, "float") == 0) {
@@ -2191,11 +2277,11 @@ yyreduce:
             (yyval.node) = createNode("/", "int", (yyvsp[-2].node), (yyvsp[0].node));
         }
     }
-#line 2195 "parser.tab.c"
+#line 2281 "parser.tab.c"
     break;
 
   case 57: /* expression: expression MOD expression  */
-#line 690 "parser.y"
+#line 776 "parser.y"
                                 {
         // If either operand is float, result must be float
         if (strcmp((yyvsp[-2].node)->type, "float") == 0 || strcmp((yyvsp[0].node)->type, "float") == 0) {
@@ -2204,83 +2290,83 @@ yyreduce:
             (yyval.node) = createNode("%", "int", (yyvsp[-2].node), (yyvsp[0].node));
         }
     }
-#line 2208 "parser.tab.c"
+#line 2294 "parser.tab.c"
     break;
 
   case 58: /* expression: expression GT expression  */
-#line 698 "parser.y"
+#line 784 "parser.y"
                                {
         (yyval.node) = createNode(">", "int", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2216 "parser.tab.c"
+#line 2302 "parser.tab.c"
     break;
 
   case 59: /* expression: expression LT expression  */
-#line 701 "parser.y"
+#line 787 "parser.y"
                                {
         (yyval.node) = createNode("<", "int", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2224 "parser.tab.c"
+#line 2310 "parser.tab.c"
     break;
 
   case 60: /* expression: expression GE expression  */
-#line 704 "parser.y"
+#line 790 "parser.y"
                                {
         (yyval.node) = createNode(">=", "int", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2232 "parser.tab.c"
+#line 2318 "parser.tab.c"
     break;
 
   case 61: /* expression: expression LE expression  */
-#line 707 "parser.y"
+#line 793 "parser.y"
                                {
         (yyval.node) = createNode("<=", "int", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2240 "parser.tab.c"
+#line 2326 "parser.tab.c"
     break;
 
   case 62: /* expression: expression EQ expression  */
-#line 710 "parser.y"
+#line 796 "parser.y"
                                {
         (yyval.node) = createNode("==", "int", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2248 "parser.tab.c"
+#line 2334 "parser.tab.c"
     break;
 
   case 63: /* expression: expression AND expression  */
-#line 713 "parser.y"
+#line 799 "parser.y"
                                 {
         (yyval.node) = createNode("&&", "int", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2256 "parser.tab.c"
+#line 2342 "parser.tab.c"
     break;
 
   case 64: /* expression: expression OR expression  */
-#line 716 "parser.y"
+#line 802 "parser.y"
                                {
         (yyval.node) = createNode("||", "int", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2264 "parser.tab.c"
+#line 2350 "parser.tab.c"
     break;
 
   case 65: /* expression: NOT expression  */
-#line 719 "parser.y"
+#line 805 "parser.y"
                      {
         (yyval.node) = createNode("!", "int", (yyvsp[0].node), NULL);
     }
-#line 2272 "parser.tab.c"
+#line 2358 "parser.tab.c"
     break;
 
   case 66: /* expression: MINUS expression  */
-#line 722 "parser.y"
+#line 808 "parser.y"
                                     {
         (yyval.node) = createNode("unary-", "int", (yyvsp[0].node), NULL);
     }
-#line 2280 "parser.tab.c"
+#line 2366 "parser.tab.c"
     break;
 
   case 67: /* expression: IDENTIFIER  */
-#line 725 "parser.y"
+#line 811 "parser.y"
                  {
         int index = lookupSymbol((yyvsp[0].str), currentScope);
         if (index == -1) {
@@ -2291,11 +2377,11 @@ yyreduce:
             (yyval.node) = createNode((yyvsp[0].str), symbolTable[index].type, NULL, NULL);
         }
     }
-#line 2295 "parser.tab.c"
+#line 2381 "parser.tab.c"
     break;
 
   case 68: /* expression: NUMBER  */
-#line 735 "parser.y"
+#line 821 "parser.y"
              {
         // Check if number contains a decimal point
         if (strchr((yyvsp[0].str), '.') != NULL) {
@@ -2306,19 +2392,19 @@ yyreduce:
             (yyval.node)->value = atoi((yyvsp[0].str));
         }
     }
-#line 2310 "parser.tab.c"
+#line 2396 "parser.tab.c"
     break;
 
   case 69: /* expression: LPAREN expression RPAREN  */
-#line 745 "parser.y"
+#line 831 "parser.y"
                                { 
         (yyval.node) = (yyvsp[-1].node); 
     }
-#line 2318 "parser.tab.c"
+#line 2404 "parser.tab.c"
     break;
 
   case 70: /* expression: IDENTIFIER INCREMENT  */
-#line 748 "parser.y"
+#line 834 "parser.y"
                            {
         int index = lookupSymbol((yyvsp[-1].str), currentScope);
         if (index != -1) {
@@ -2329,11 +2415,11 @@ yyreduce:
             (yyval.node) = createNode("++", "int", createNode((yyvsp[-1].str), "int", NULL, NULL), NULL);
         }
     }
-#line 2333 "parser.tab.c"
+#line 2419 "parser.tab.c"
     break;
 
   case 71: /* expression: IDENTIFIER DECREMENT  */
-#line 758 "parser.y"
+#line 844 "parser.y"
                            {
         int index = lookupSymbol((yyvsp[-1].str), currentScope);
         if (index != -1) {
@@ -2344,11 +2430,11 @@ yyreduce:
             (yyval.node) = createNode("--", "int", createNode((yyvsp[-1].str), "int", NULL, NULL), NULL);
         }
     }
-#line 2348 "parser.tab.c"
+#line 2434 "parser.tab.c"
     break;
 
   case 72: /* expression: IDENTIFIER LBRACKET expression RBRACKET  */
-#line 768 "parser.y"
+#line 854 "parser.y"
                                               {
         int index = lookupSymbol((yyvsp[-3].str), currentScope);
         if (index == -1 || strcmp(symbolTable[index].type, "array") != 0) {
@@ -2363,11 +2449,11 @@ yyreduce:
                            createNode((yyvsp[-3].str), "array", (yyvsp[-1].node), NULL), NULL);
         }
     }
-#line 2367 "parser.tab.c"
+#line 2453 "parser.tab.c"
     break;
 
   case 73: /* expression: IDENTIFIER LBRACKET expression RBRACKET LBRACKET expression RBRACKET  */
-#line 782 "parser.y"
+#line 868 "parser.y"
                                                                            {
         int index = lookupSymbol((yyvsp[-6].str), currentScope);
         if (index == -1 || strcmp(symbolTable[index].type, "array") != 0) {
@@ -2383,29 +2469,29 @@ yyreduce:
                            createNode((yyvsp[-6].str), "array", indices, NULL), NULL);
         }
     }
-#line 2387 "parser.tab.c"
+#line 2473 "parser.tab.c"
     break;
 
   case 74: /* expression: function_call  */
-#line 797 "parser.y"
+#line 883 "parser.y"
                     { (yyval.node) = (yyvsp[0].node); }
-#line 2393 "parser.tab.c"
+#line 2479 "parser.tab.c"
     break;
 
   case 75: /* elif_chain: elif_chain elif_clause  */
-#line 802 "parser.y"
+#line 888 "parser.y"
                            { (yyval.node) = createNode("ElifChain", "control", (yyvsp[-1].node), (yyvsp[0].node)); }
-#line 2399 "parser.tab.c"
+#line 2485 "parser.tab.c"
     break;
 
   case 76: /* elif_chain: elif_clause  */
-#line 803 "parser.y"
+#line 889 "parser.y"
                   { (yyval.node) = (yyvsp[0].node); }
-#line 2405 "parser.tab.c"
+#line 2491 "parser.tab.c"
     break;
 
   case 77: /* elif_clause: KEYWORD LPAREN expression RPAREN matched_stmt  */
-#line 807 "parser.y"
+#line 893 "parser.y"
                                                   {
         if (strcmp((yyvsp[-4].str), "elif_RP") == 0) {
             (yyval.node) = createNode("Elif", "control", (yyvsp[-2].node), (yyvsp[0].node));
@@ -2414,11 +2500,11 @@ yyreduce:
             (yyval.node) = NULL;
         }
     }
-#line 2418 "parser.tab.c"
+#line 2504 "parser.tab.c"
     break;
 
   case 78: /* function_call: IDENTIFIER LPAREN arg_list RPAREN  */
-#line 818 "parser.y"
+#line 904 "parser.y"
                                       {
         int index = lookupSymbol((yyvsp[-3].str), currentScope);
         
@@ -2429,70 +2515,54 @@ yyreduce:
             printf("Semantic Error: '%s' is not a function\n", (yyvsp[-3].str));
             (yyval.node) = createNode("Error", "error", NULL, NULL);
         } else {
-            int funcIndex = lookupFunction((yyvsp[-3].str));
+            // Find best matching function based on argument types
+            int funcIndex = findMatchingFunction((yyvsp[-3].str), (yyvsp[-1].node));
             
-            // Improved argument counting logic
-            int argCount = 0;
-            if ((yyvsp[-1].node) != NULL) {
-                Node* argNode = (yyvsp[-1].node);
-                if (strcmp(argNode->name, "Argument") == 0) {
-                    argCount = 1;
-                } else if (strcmp(argNode->name, "Arguments") == 0) {
-                    // For multiple arguments, count differently
-                    argCount = 2; // Start with 2 for the first pair
-                    
-                    // Traverse the nested Arguments nodes
-                    Node* current = argNode->left;
-                    while (current != NULL && strcmp(current->name, "Arguments") == 0) {
-                        argCount++;
-                        current = current->left;
-                    }
-                }
-            }
-            
-            if (argCount > functionTable[funcIndex].paramCount) {
-                printf("Semantic Error: Function '%s' called with too many arguments (%d but expects %d)\n",
-                       (yyvsp[-3].str), argCount, functionTable[funcIndex].paramCount);
-                (yyval.node) = createNode("Error", "error", NULL, NULL);
-            } else if (argCount < functionTable[funcIndex].paramCount) {
-                printf("Semantic Error: Function '%s' called with too few arguments (%d but expects %d)\n",
-                       (yyvsp[-3].str), argCount, functionTable[funcIndex].paramCount);
+            if (funcIndex == -1) {
+                printf("Semantic Error: No matching overloaded function '%s' found for given arguments\n", (yyvsp[-3].str));
                 (yyval.node) = createNode("Error", "error", NULL, NULL);
             } else {
+                // Create a node that includes the function ID to disambiguate which overloaded version
+                char functionIdStr[20];
+                sprintf(functionIdStr, "%s#%d", (yyvsp[-3].str), functionTable[funcIndex].id);
+                
                 (yyval.node) = createNode("Call", functionTable[funcIndex].returnType,
-                               createNode((yyvsp[-3].str), "function", (yyvsp[-1].node), NULL), NULL);
+                               createNode(functionIdStr, "function", (yyvsp[-1].node), NULL), NULL);
+                
+                printf("Function call resolved to: %s (ID: %d)\n", 
+                       functionTable[funcIndex].name, functionTable[funcIndex].id);
             }
         }
     }
-#line 2468 "parser.tab.c"
+#line 2538 "parser.tab.c"
     break;
 
   case 79: /* arg_list: arg_list COMMA expression  */
-#line 866 "parser.y"
+#line 936 "parser.y"
                               { 
         (yyval.node) = createNode("Arguments", "args", (yyvsp[-2].node), (yyvsp[0].node)); 
     }
-#line 2476 "parser.tab.c"
+#line 2546 "parser.tab.c"
     break;
 
   case 80: /* arg_list: expression  */
-#line 869 "parser.y"
+#line 939 "parser.y"
                  { 
         (yyval.node) = createNode("Argument", "arg", (yyvsp[0].node), NULL); 
     }
-#line 2484 "parser.tab.c"
+#line 2554 "parser.tab.c"
     break;
 
   case 81: /* arg_list: %empty  */
-#line 872 "parser.y"
+#line 942 "parser.y"
                   { 
         (yyval.node) = NULL; 
     }
-#line 2492 "parser.tab.c"
+#line 2562 "parser.tab.c"
     break;
 
 
-#line 2496 "parser.tab.c"
+#line 2566 "parser.tab.c"
 
       default: break;
     }
@@ -2685,7 +2755,7 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 877 "parser.y"
+#line 947 "parser.y"
 
 
 // Move the countArguments function to the C section after the grammar
@@ -2711,6 +2781,92 @@ int countArguments(Node* argList) {
     }
     
     return 0;
+}
+
+// Add a function to find the best matching function based on argument types
+int findMatchingFunction(char* name, Node* argList) {
+    int bestMatch = -1;
+    
+    // Count arguments
+    int argCount = 0;
+    if (argList != NULL) {
+        Node* argNode = argList;
+        if (strcmp(argNode->name, "Argument") == 0) {
+            argCount = 1;
+        } else if (strcmp(argNode->name, "Arguments") == 0) {
+            argCount = 2; // Start with 2 for the first pair
+            
+            // Traverse the nested Arguments nodes
+            Node* current = argNode->left;
+            while (current != NULL && strcmp(current->name, "Arguments") == 0) {
+                argCount++;
+                current = current->left;
+            }
+        }
+    }
+    
+    // Collect argument types
+    char* argTypes[10]; // Max 10 arguments
+    int argTypesCount = 0;
+    
+    if (argList != NULL) {
+        // Extract types from the argument nodes
+        if (strcmp(argList->name, "Argument") == 0) {
+            argTypes[0] = strdup(argList->left->type);
+            argTypesCount = 1;
+        } else if (strcmp(argList->name, "Arguments") == 0) {
+            // The rightmost argument is in argList->right
+            argTypes[0] = strdup(argList->right->type);
+            argTypesCount = 1;
+            
+            // Traverse left branch to gather other arguments
+            Node* current = argList->left;
+            while (current != NULL) {
+                if (strcmp(current->name, "Argument") == 0) {
+                    argTypes[argTypesCount++] = strdup(current->left->type);
+                    break;
+                } else if (strcmp(current->name, "Arguments") == 0) {
+                    argTypes[argTypesCount++] = strdup(current->right->type);
+                    current = current->left;
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+    
+    // Find functions that match the name and parameter count
+    for (int i = 0; i < functionCount; i++) {
+        if (strcmp(functionTable[i].name, name) == 0 && 
+            functionTable[i].paramCount == argCount) {
+            
+            // Check parameter type compatibility
+            int typeMatch = 1;
+            for (int j = 0; j < argCount; j++) {
+                char* paramType = functionTable[i].params[j].type;
+                char* argType = argTypes[argTypesCount - j - 1]; // Arguments are in reverse order
+                
+                if (strcmp(paramType, argType) != 0 && 
+                    !(strcmp(paramType, "float") == 0 && strcmp(argType, "int") == 0)) {
+                    // Parameter type doesn't match and no implicit conversion possible
+                    typeMatch = 0;
+                    break;
+                }
+            }
+            
+            if (typeMatch) {
+                bestMatch = i;
+                break;
+            }
+        }
+    }
+    
+    // Clean up
+    for (int i = 0; i < argTypesCount; i++) {
+        free(argTypes[i]);
+    }
+    
+    return bestMatch;
 }
 
 int main() {

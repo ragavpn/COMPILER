@@ -1,16 +1,31 @@
 {
+    // Basic function declarations
     int_RP 095printHello() {
         int_RP 095message = 42;
         return_RP 095message;
     }
     
+    // First version of add - takes two integers
     int_RP 095add(int_RP 095param1, int_RP 095param2) {
         int_RP 095result_add = 095param1 + 095param2;
         return_RP 095result_add;
     }
     
+    // Second version of add - takes a float and an int
+    float_RP 095add(float_RP 095param1, int_RP 095param2) {
+        float_RP 095result_add = 095param1 + 095param2;
+        return_RP 095result_add;
+    }
+    
+    // Original calculate function
     float_RP 095calculate(int_RP 095param3, float_RP 095param4) {
         float_RP 095result_calc = 095param3 * 095param4;
+        return_RP 095result_calc;
+    }
+    
+    // Second version with different param types
+    int_RP 095calculate(int_RP 095param3, int_RP 095param4) {
+        int_RP 095result_calc = 095param3 * 095param4;
         return_RP 095result_calc;
     }
     
@@ -62,11 +77,18 @@
         095counter = 095counter - 1;
     }
     
-    // Function calls
+    // Test overloaded function calls
     095printHello();
-    int_RP 095sum_result = 095add(10, 20);
-    float_RP 095calc_result = 095calculate(095num1, 095num2);
-
+    
+    // Should resolve to 095add(int, int)
+    int_RP 095sum_int = 095add(10, 20);
+    
+    // Should resolve to 095add(float, int)
+    float_RP 095sum_float = 095add(10.5, 20);
+    
+    // Should resolve to 095calculate(int, float)
+    float_RP 095calc_result1 = 095calculate(095num1, 095num2);
+    
     // Type compatibility tests (with errors)
     // int_RP 095bad_assign = 20.5;  // Error: assigning float to int - type conversion occurs
     // float_RP 095mod_test = 095num1 % 095num2;  // Error: modulo requires integer operands

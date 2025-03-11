@@ -24,6 +24,7 @@ typedef struct Symbol {
     char *type; // e.g., "int", "float", "array", "function"
     int scope;
     int array_dimensions; // Number of dimensions for arrays
+    int function_id;     // For function overload management
 } Symbol;
 
 Symbol symbolTable[100];
@@ -42,18 +43,22 @@ typedef struct {
     char* returnType;
     Parameter params[10];  // Allow up to 10 parameters
     int paramCount;
+    int id;               // Unique identifier for this function
 } Function;
 
 Function functionTable[50];  // Store up to 50 functions
 int functionCount = 0;
+int nextFunctionId = 1;     // For generating unique function IDs
 
 // Add these declarations before the main parser code:
 char* paramNames[10];
 char* paramTypes[10];
 int paramCount = 0;
 
-// Add this function declaration before it's used
+// Add prototype for findMatchingFunction
+int findMatchingFunction(char* name, Node* argList);
 int countArguments(Node* argList);
+int lookupFunctionOverload(char* name, char* returnType, char** paramTypes, int paramCount);
 
 Node *createNode(char *name, char *type, Node *left, Node *right) {
     Node *node = (Node *)malloc(sizeof(Node));
@@ -82,31 +87,127 @@ int lookupSymbol(char *name, int scope) {
     return -1;
 }
 
+// Function to add a function to the function table allowing overloading
+int addFunction(char* name, char* returnType) {
+    // Check if there's enough space in the function table
+    if (functionCount >= 50) {
+        printf("Semantic Error: Too many functions defined\n");
+        return -1;
+    }
+    
+    // We allow multiple functions with the same name (overloading)
+    // but need to collect parameter types first
+    char* paramTypesCopy[10];
+    for (int i = 0; i < paramCount; i++) {
+        paramTypesCopy[i] = strdup(paramTypes[i]);
+    }
+    
+    // Check if this exact function signature already exists
+    int existingFunc = lookupFunctionOverload(name, returnType, paramTypesCopy, paramCount);
+    if (existingFunc >= 0) {
+        printf("Semantic Error: Function '%s' with identical signature already exists\n", name);
+        
+        // Clean up temporary parameter types
+        for (int i = 0; i < paramCount; i++) {
+            free(paramTypesCopy[i]);
+        }
+        
+        return -1;
+    }
+    
+    // Clean up temporary parameter types
+    for (int i = 0; i < paramCount; i++) {
+        free(paramTypesCopy[i]);
+    }
+    
+    // This is a new function signature - add it
+    functionTable[functionCount].name = strdup(name);
+    functionTable[functionCount].returnType = strdup(returnType);
+    functionTable[functionCount].paramCount = 0;
+    functionTable[functionCount].id = nextFunctionId++;
+    return functionCount++;
+}
+
+// Look up a function with exact signature
+int lookupFunctionOverload(char* name, char* returnType, char** paramTypes, int paramCount) {
+    for (int i = 0; i < functionCount; i++) {
+        if (strcmp(functionTable[i].name, name) == 0 && 
+            strcmp(functionTable[i].returnType, returnType) == 0 &&
+            functionTable[i].paramCount == paramCount) {
+            
+            // Check each parameter type
+            int match = 1;
+            for (int j = 0; j < paramCount; j++) {
+                if (strcmp(functionTable[i].params[j].type, paramTypes[j]) != 0) {
+                    match = 0;
+                    break;
+                }
+            }
+            
+            if (match) {
+                return i; // Found matching function
+            }
+        }
+    }
+    return -1; // No match found
+}
+
+// Modified to handle function overloads
 void addSymbol(char *name, char *type, int scope, int array_dimensions) {
-    if (lookupSymbol(name, scope) != -1) {
-        yyerror("Duplicate declaration");
-    } else {
+    // Special handling for function names - they can be overloaded
+    if (strcmp(type, "function") == 0) {
         symbolTable[symbolCount].name = strdup(name);
         symbolTable[symbolCount].type = strdup(type);
         symbolTable[symbolCount].scope = scope;
         symbolTable[symbolCount].array_dimensions = array_dimensions;
+        symbolTable[symbolCount].function_id = nextFunctionId - 1; // Associate with latest function
         symbolCount++;
+        return;
     }
+    
+    // For parameters, add scope+function_id to make them unique
+    if (scope > 1) { // Parameters are typically at scope 2+
+        // Don't check for duplicates - parameters can have same name in different functions
+        symbolTable[symbolCount].name = strdup(name);
+        symbolTable[symbolCount].type = strdup(type);
+        symbolTable[symbolCount].scope = scope;
+        symbolTable[symbolCount].array_dimensions = array_dimensions;
+        symbolTable[symbolCount].function_id = nextFunctionId - 1; // Associate with current function
+        symbolCount++;
+        return;
+    }
+    
+    // Regular variables - check for duplicates at the same scope
+    for (int i = 0; i < symbolCount; i++) {
+        if (strcmp(symbolTable[i].name, name) == 0 && symbolTable[i].scope == scope) {
+            yyerror("Duplicate declaration");
+            return;
+        }
+    }
+    
+    symbolTable[symbolCount].name = strdup(name);
+    symbolTable[symbolCount].type = strdup(type);
+    symbolTable[symbolCount].scope = scope;
+    symbolTable[symbolCount].array_dimensions = array_dimensions;
+    symbolTable[symbolCount].function_id = 0; // Not a function
+    symbolCount++;
 }
 
+// Modified to include function_id in the output
 void printSymbolTable() {
     printf("\nSymbol Table:\n");
-    printf("+----------------+----------------+--------+----------------+\n");
-    printf("| Name           | Type           | Scope  | Array Dim      |\n");
-    printf("+----------------+----------------+--------+----------------+\n");
+    printf("+----------------+----------------+--------+----------------+--------+\n");
+    printf("| Name           | Type           | Scope  | Array Dim      | Func ID|\n");
+    printf("+----------------+----------------+--------+----------------+--------+\n");
     for (int i = 0; i < symbolCount; i++) {
-        printf("| %-14s | %-14s | %-6d | %-14d |\n",
+        printf("| %-14s | %-14s | %-6d | %-14d | %-6d |\n",
                symbolTable[i].name,
                symbolTable[i].type,
                symbolTable[i].scope,
-               symbolTable[i].array_dimensions);
+               symbolTable[i].array_dimensions,
+               symbolTable[i].function_id);
     }
-    printf("+----------------+----------------+--------+----------------+\n");
+    printf("+----------------+----------------+--------+----------------+--------+\n");
 }
 
 // Function to get type from keyword by removing _RP suffix
@@ -181,22 +282,6 @@ int isAssignmentCompatible(const char* targetType, const char* valueType) {
     return 0;
 }
 
-// Function to add a function to the function table
-int addFunction(char* name, char* returnType) {
-    // Check if function already exists
-    for (int i = 0; i < functionCount; i++) {
-        if (strcmp(functionTable[i].name, name) == 0) {
-            printf("Semantic Error: Function '%s' already declared\n", name);
-            return -1;
-        }
-    }
-    
-    functionTable[functionCount].name = strdup(name);
-    functionTable[functionCount].returnType = strdup(returnType);
-    functionTable[functionCount].paramCount = 0;
-    return functionCount++;
-}
-
 // Function to add a parameter to a function
 void addParameter(int funcIndex, char* name, char* type) {
     int paramIdx = functionTable[funcIndex].paramCount;
@@ -222,13 +307,14 @@ int lookupFunction(char* name) {
 
 // Function to print the function table - simpler approach with proper border
 void printFunctionTable() {
-    printf("\nFunction Table:\n");
-    printf("+----------------+----------------+-------------------------+\n");
-    printf("| Name           | Return Type    | Parameters              |\n");
-    printf("+----------------+----------------+-------------------------+\n");
+    printf("\nFunction Table (with Overloading):\n");
+    printf("+------+----------------+----------------+-------------------------+\n");
+    printf("| ID   | Name           | Return Type    | Parameters              |\n");
+    printf("+------+----------------+----------------+-------------------------+\n");
     
     for (int i = 0; i < functionCount; i++) {
-        printf("| %-14s | %-14s | ", 
+        printf("| %-4d | %-14s | %-14s | ", 
+               functionTable[i].id,
                functionTable[i].name, 
                functionTable[i].returnType);
         
@@ -258,7 +344,7 @@ void printFunctionTable() {
         }
     }
     
-    printf("+----------------+----------------+-------------------------+\n");
+    printf("+------+----------------+----------------+-------------------------+\n");
 }
 
 // Add to your printTree function to include function table
@@ -825,38 +911,22 @@ function_call:
             printf("Semantic Error: '%s' is not a function\n", $1);
             $$ = createNode("Error", "error", NULL, NULL);
         } else {
-            int funcIndex = lookupFunction($1);
+            // Find best matching function based on argument types
+            int funcIndex = findMatchingFunction($1, $3);
             
-            // Improved argument counting logic
-            int argCount = 0;
-            if ($3 != NULL) {
-                Node* argNode = $3;
-                if (strcmp(argNode->name, "Argument") == 0) {
-                    argCount = 1;
-                } else if (strcmp(argNode->name, "Arguments") == 0) {
-                    // For multiple arguments, count differently
-                    argCount = 2; // Start with 2 for the first pair
-                    
-                    // Traverse the nested Arguments nodes
-                    Node* current = argNode->left;
-                    while (current != NULL && strcmp(current->name, "Arguments") == 0) {
-                        argCount++;
-                        current = current->left;
-                    }
-                }
-            }
-            
-            if (argCount > functionTable[funcIndex].paramCount) {
-                printf("Semantic Error: Function '%s' called with too many arguments (%d but expects %d)\n",
-                       $1, argCount, functionTable[funcIndex].paramCount);
-                $$ = createNode("Error", "error", NULL, NULL);
-            } else if (argCount < functionTable[funcIndex].paramCount) {
-                printf("Semantic Error: Function '%s' called with too few arguments (%d but expects %d)\n",
-                       $1, argCount, functionTable[funcIndex].paramCount);
+            if (funcIndex == -1) {
+                printf("Semantic Error: No matching overloaded function '%s' found for given arguments\n", $1);
                 $$ = createNode("Error", "error", NULL, NULL);
             } else {
+                // Create a node that includes the function ID to disambiguate which overloaded version
+                char functionIdStr[20];
+                sprintf(functionIdStr, "%s#%d", $1, functionTable[funcIndex].id);
+                
                 $$ = createNode("Call", functionTable[funcIndex].returnType,
-                               createNode($1, "function", $3, NULL), NULL);
+                               createNode(functionIdStr, "function", $3, NULL), NULL);
+                
+                printf("Function call resolved to: %s (ID: %d)\n", 
+                       functionTable[funcIndex].name, functionTable[funcIndex].id);
             }
         }
     }
@@ -899,6 +969,92 @@ int countArguments(Node* argList) {
     }
     
     return 0;
+}
+
+// Add a function to find the best matching function based on argument types
+int findMatchingFunction(char* name, Node* argList) {
+    int bestMatch = -1;
+    
+    // Count arguments
+    int argCount = 0;
+    if (argList != NULL) {
+        Node* argNode = argList;
+        if (strcmp(argNode->name, "Argument") == 0) {
+            argCount = 1;
+        } else if (strcmp(argNode->name, "Arguments") == 0) {
+            argCount = 2; // Start with 2 for the first pair
+            
+            // Traverse the nested Arguments nodes
+            Node* current = argNode->left;
+            while (current != NULL && strcmp(current->name, "Arguments") == 0) {
+                argCount++;
+                current = current->left;
+            }
+        }
+    }
+    
+    // Collect argument types
+    char* argTypes[10]; // Max 10 arguments
+    int argTypesCount = 0;
+    
+    if (argList != NULL) {
+        // Extract types from the argument nodes
+        if (strcmp(argList->name, "Argument") == 0) {
+            argTypes[0] = strdup(argList->left->type);
+            argTypesCount = 1;
+        } else if (strcmp(argList->name, "Arguments") == 0) {
+            // The rightmost argument is in argList->right
+            argTypes[0] = strdup(argList->right->type);
+            argTypesCount = 1;
+            
+            // Traverse left branch to gather other arguments
+            Node* current = argList->left;
+            while (current != NULL) {
+                if (strcmp(current->name, "Argument") == 0) {
+                    argTypes[argTypesCount++] = strdup(current->left->type);
+                    break;
+                } else if (strcmp(current->name, "Arguments") == 0) {
+                    argTypes[argTypesCount++] = strdup(current->right->type);
+                    current = current->left;
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+    
+    // Find functions that match the name and parameter count
+    for (int i = 0; i < functionCount; i++) {
+        if (strcmp(functionTable[i].name, name) == 0 && 
+            functionTable[i].paramCount == argCount) {
+            
+            // Check parameter type compatibility
+            int typeMatch = 1;
+            for (int j = 0; j < argCount; j++) {
+                char* paramType = functionTable[i].params[j].type;
+                char* argType = argTypes[argTypesCount - j - 1]; // Arguments are in reverse order
+                
+                if (strcmp(paramType, argType) != 0 && 
+                    !(strcmp(paramType, "float") == 0 && strcmp(argType, "int") == 0)) {
+                    // Parameter type doesn't match and no implicit conversion possible
+                    typeMatch = 0;
+                    break;
+                }
+            }
+            
+            if (typeMatch) {
+                bestMatch = i;
+                break;
+            }
+        }
+    }
+    
+    // Clean up
+    for (int i = 0; i < argTypesCount; i++) {
+        free(argTypes[i]);
+    }
+    
+    return bestMatch;
 }
 
 int main() {
