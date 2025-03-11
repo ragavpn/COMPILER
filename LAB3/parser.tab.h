@@ -101,7 +101,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 374 "parser.y"
+#line 411 "parser.y"
 
     char *str;
     struct Node *node;

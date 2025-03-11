@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 // DO NOT DECLARE rootNode HERE - it needs to be after the Node struct definition
 
@@ -25,6 +26,7 @@ typedef struct Symbol {
     int scope;
     int array_dimensions; // Number of dimensions for arrays
     int function_id;     // For function overload management
+    int value;      // Add this to track the current value
 } Symbol;
 
 Symbol symbolTable[100];
@@ -60,6 +62,9 @@ int findMatchingFunction(char* name, Node* argList);
 int countArguments(Node* argList);
 int lookupFunctionOverload(char* name, char* returnType, char** paramTypes, int paramCount);
 
+// Add this prototype near the other function prototypes (around line 60)
+int evaluateExpr(const char* op, int leftVal, int rightVal);
+
 Node *createNode(char *name, char *type, Node *left, Node *right) {
     Node *node = (Node *)malloc(sizeof(Node));
     node->name = strdup(name);
@@ -70,10 +75,39 @@ Node *createNode(char *name, char *type, Node *left, Node *right) {
     return node;
 }
 
+// Update this helper function to be more selective about showing values
+int shouldShowValue(Node *node) {
+    // Only show values for variables and number literals
+    if (node == NULL) return 0;
+    
+    // Show values for number literals
+    if ((strcmp(node->type, "int") == 0 || strcmp(node->type, "float") == 0) && 
+        (isdigit(node->name[0]) || node->name[0] == '.')) {
+        return 1; // It's a number literal
+    }
+    
+    // Show values for variable identifiers (but not arrays, functions, etc.)
+    if ((strcmp(node->type, "int") == 0 || strcmp(node->type, "float") == 0) && 
+        strncmp(node->name, "095", 3) == 0) {
+        return 1; // It's a variable
+    }
+    
+    // Don't show values for anything else
+    return 0;
+}
+
+// Modify the printTree function to selectively show values
 void printTree(Node *root, int level) {
     if (root == NULL) return;
+    
     for (int i = 0; i < level; i++) printf("  ");
-    printf("└── %s (%s, %d)\n", root->name, root->type, root->value);
+    
+    if (shouldShowValue(root)) {
+        printf("└── %s (%s, %d)\n", root->name, root->type, root->value);
+    } else {
+        printf("└── %s (%s)\n", root->name, root->type);
+    }
+    
     printTree(root->left, level + 1);
     printTree(root->right, level + 1);
 }
@@ -161,6 +195,7 @@ void addSymbol(char *name, char *type, int scope, int array_dimensions) {
         symbolTable[symbolCount].scope = scope;
         symbolTable[symbolCount].array_dimensions = array_dimensions;
         symbolTable[symbolCount].function_id = nextFunctionId - 1; // Associate with latest function
+        symbolTable[symbolCount].value = 0; // Initialize value
         symbolCount++;
         return;
     }
@@ -173,6 +208,7 @@ void addSymbol(char *name, char *type, int scope, int array_dimensions) {
         symbolTable[symbolCount].scope = scope;
         symbolTable[symbolCount].array_dimensions = array_dimensions;
         symbolTable[symbolCount].function_id = nextFunctionId - 1; // Associate with current function
+        symbolTable[symbolCount].value = 0; // Initialize value
         symbolCount++;
         return;
     }
@@ -190,6 +226,7 @@ void addSymbol(char *name, char *type, int scope, int array_dimensions) {
     symbolTable[symbolCount].scope = scope;
     symbolTable[symbolCount].array_dimensions = array_dimensions;
     symbolTable[symbolCount].function_id = 0; // Not a function
+    symbolTable[symbolCount].value = 0; // Initialize value
     symbolCount++;
 }
 
@@ -472,6 +509,8 @@ statement:
         if (isAssignmentCompatible(type, $4->type)) {
             addSymbol($2, type, currentScope, 0);
             $$ = createNode("Assignment", type, createNode($2, type, NULL, NULL), $4);
+            $$->value = $4->value;
+            symbolTable[lookupSymbol($2, currentScope)].value = $4->value;
         } else {
             $$ = createNode("Error", "error", NULL, NULL);
         }
@@ -502,6 +541,8 @@ statement:
         } else if (isAssignmentCompatible(symbolTable[index].type, $3->type)) {
             $$ = createNode("Assignment", symbolTable[index].type, 
                            createNode($1, symbolTable[index].type, NULL, NULL), $3);
+            $$->value = $3->value;
+            symbolTable[index].value = $3->value;
         } else {
             $$ = createNode("Error", "error", NULL, NULL);
         }
@@ -745,77 +786,101 @@ expression:
         // If either operand is float, result must be float
         if (strcmp($1->type, "float") == 0 || strcmp($3->type, "float") == 0) {
             $$ = createNode("+", "float", $1, $3);
+            // For float operations, we can approximate
+            $$->value = (int)($1->value + $3->value);
         } else {
             $$ = createNode("+", "int", $1, $3);
+            $$->value = evaluateExpr("+", $1->value, $3->value);
         }
     }
     | expression MINUS expression {
         // If either operand is float, result must be float
         if (strcmp($1->type, "float") == 0 || strcmp($3->type, "float") == 0) {
             $$ = createNode("-", "float", $1, $3);
+            // For float operations, we can approximate
+            $$->value = (int)($1->value - $3->value);
         } else {
             $$ = createNode("-", "int", $1, $3);
+            $$->value = evaluateExpr("-", $1->value, $3->value);
         }
     }
     | expression MULT expression {
         // If either operand is float, result must be float
         if (strcmp($1->type, "float") == 0 || strcmp($3->type, "float") == 0) {
             $$ = createNode("*", "float", $1, $3);
+            // For float operations, we can approximate
+            $$->value = (int)(atof($1->name) * atof($3->name));
         } else {
             $$ = createNode("*", "int", $1, $3);
+            $$->value = evaluateExpr("*", $1->value, $3->value);
         }
     }
     | expression DIV expression {
         // If either operand is float, result must be float
         if (strcmp($1->type, "float") == 0 || strcmp($3->type, "float") == 0) {
             $$ = createNode("/", "float", $1, $3);
+            // For float operations, we can approximate
+            $$->value = (int)(atof($1->name) / atof($3->name));
         } else {
             $$ = createNode("/", "int", $1, $3);
+            $$->value = evaluateExpr("/", $1->value, $3->value);
         }
     }
     | expression MOD expression {
         // If either operand is float, result must be float
         if (strcmp($1->type, "float") == 0 || strcmp($3->type, "float") == 0) {
             $$ = createNode("%", "float", $1, $3);
+            // For float operations, we need to convert to int first for modulo
+            $$->value = (int)($1->value) % (int)($3->value);
         } else {
             $$ = createNode("%", "int", $1, $3);
+            $$->value = evaluateExpr("%", $1->value, $3->value);
         }
     }
     | expression GT expression {
         $$ = createNode(">", "int", $1, $3);
+        $$->value = ($1->value > $3->value);
     }
     | expression LT expression {
         $$ = createNode("<", "int", $1, $3);
+        $$->value = ($1->value < $3->value);
     }
     | expression GE expression {
         $$ = createNode(">=", "int", $1, $3);
+        $$->value = ($1->value >= $3->value);
     }
     | expression LE expression {
         $$ = createNode("<=", "int", $1, $3);
+        $$->value = ($1->value <= $3->value);
     }
     | expression EQ expression {
         $$ = createNode("==", "int", $1, $3);
+        $$->value = ($1->value == $3->value);
     }
     | expression AND expression {
         $$ = createNode("&&", "int", $1, $3);
+        $$->value = ($1->value && $3->value);
     }
     | expression OR expression {
         $$ = createNode("||", "int", $1, $3);
+        $$->value = ($1->value || $3->value);
     }
     | NOT expression {
         $$ = createNode("!", "int", $2, NULL);
+        $$->value = (!$2->value);
     }
     | MINUS expression %prec UMINUS {
         $$ = createNode("unary-", "int", $2, NULL);
+        $$->value = (-$2->value);
     }
     | IDENTIFIER {
         int index = lookupSymbol($1, currentScope);
         if (index == -1) {
-            // Report error for undeclared variables
             printf("Semantic Error: Undeclared variable '%s' used in expression\n", $1);
             $$ = createNode($1, "error", NULL, NULL);
         } else {
             $$ = createNode($1, symbolTable[index].type, NULL, NULL);
+            $$->value = symbolTable[index].value;
         }
     }
     | NUMBER {
@@ -1055,6 +1120,23 @@ int findMatchingFunction(char* name, Node* argList) {
     }
     
     return bestMatch;
+}
+
+// Add this function to evaluate binary expressions
+int evaluateExpr(const char* op, int leftVal, int rightVal) {
+    if (strcmp(op, "+") == 0) return leftVal + rightVal;
+    if (strcmp(op, "-") == 0) return leftVal - rightVal;
+    if (strcmp(op, "*") == 0) return leftVal * rightVal;
+    if (strcmp(op, "/") == 0) return rightVal != 0 ? leftVal / rightVal : 0;
+    if (strcmp(op, "%") == 0) return rightVal != 0 ? leftVal % rightVal : 0;
+    if (strcmp(op, ">") == 0) return leftVal > rightVal;
+    if (strcmp(op, "<") == 0) return leftVal < rightVal;
+    if (strcmp(op, ">=") == 0) return leftVal >= rightVal;
+    if (strcmp(op, "<=") == 0) return leftVal <= rightVal;
+    if (strcmp(op, "==") == 0) return leftVal == rightVal;
+    if (strcmp(op, "&&") == 0) return leftVal && rightVal;
+    if (strcmp(op, "||") == 0) return leftVal || rightVal;
+    return 0;
 }
 
 int main() {
