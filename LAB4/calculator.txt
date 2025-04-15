@@ -1,0 +1,29 @@
+{
+    int_RP 095num1 = 10;
+    int_RP 095num2 = 5;
+    int_RP 095operation = 3;  // 1=add, 2=subtract, 3=multiply, 4=divide
+    float_RP 095result = 0;
+    
+    switch_RP (095operation) {
+        case_RP 1:
+            095result = 095num1 + 095num2;
+            break_RP;
+            
+        case_RP 2:
+            095result = 095num1 - 095num2;
+            break_RP;
+            
+        case_RP 3:
+            095result = 095num1 * 095num2;
+            break_RP;
+            
+        case_RP 4:
+            095result = 095num1 / 095num2;
+            break_RP;
+            
+        default_RP:
+            // Invalid operation code
+            095result = -1;
+            break_RP;
+    }
+}

@@ -1,0 +1,100 @@
+{
+    // Basic function declarations
+    int_RP 095printHello() {
+        int_RP 095message = 42;
+        return_RP 095message;
+    }
+    
+    // First version of add - takes two integers
+    int_RP 095add(int_RP 095param1, int_RP 095param2) {
+        int_RP 095result_add = 095param1 + 095param2;
+        return_RP 095result_add;
+    }
+    
+    // Second version of add - takes a float and an int
+    float_RP 095add(float_RP 095param1, int_RP 095param2) {
+        float_RP 095result_add = 095param1 + 095param2;
+        return_RP 095result_add;
+    }
+    
+    // Original calculate function
+    float_RP 095calculate(int_RP 095param3, float_RP 095param4) {
+        float_RP 095result_calc = 095param3 * 095param4;
+        return_RP 095result_calc;
+    }
+    
+    // Second version with different param types
+    int_RP 095calculate(int_RP 095param3, int_RP 095param4) {
+        int_RP 095result_calc = 095param3 * 095param4;
+        return_RP 095result_calc;
+    }
+    
+    // Basic variable declarations
+    int_RP 095num1 = 42;
+    float_RP 095num2 = 20.5;
+    
+    // Array declarations and operations
+    int_RP 095arr1[10];  // 1D array
+    095arr1[0] = 100;
+    095arr1[5] = 095num1;
+    
+    // 2D array declaration and operations
+    int_RP 095matrix[3][3];
+    095matrix[0][0] = 1;
+    095matrix[1][2] = 095arr1[0] + 5;
+    
+    // Float array
+    float_RP 095scores[5];
+    095scores[2] = 095num2 * 2;
+    
+    if_RP (095num1 > 40) {
+        095num2 = 095num1 + 10;
+        095arr1[1] = 095arr1[0] + 10;
+    } elif_RP (095num1 > 30) {
+        095num2 = 095num1 + 5;
+    } else_RP {
+        int_RP 095local_var = 42;
+        095num2 = 095num1 - 10;
+        095arr1[3] = 095local_var;
+    }
+    
+    float_RP 095total = 0;
+    for_RP (int_RP 095i = 0; 095i < 10; 095i++) {
+        095total = 095total + 095i;
+        095arr1[095i] = 095i * 2;
+    }
+    
+    int_RP 095choice = 2;
+    switch_RP (095choice) {
+        case_RP 1: 095num1 = 10; 095arr1[1] = 100; break_RP;
+        case_RP 2: 095num1 = 20; 095arr1[2] = 200; break_RP;
+        default_RP: 095num1 = 0; 095arr1[0] = 095num1; break_RP;
+    }
+    
+    int_RP 095counter = 5;
+    while_RP (095counter > 0) {
+        095arr1[095counter % 10] = 095counter;
+        095counter = 095counter - 1;
+    }
+    
+    // Test overloaded function calls
+    095printHello();
+    
+    // Should resolve to 095add(int, int)
+    int_RP 095sum_int = 095add(10, 20);
+    
+    // Should resolve to 095add(float, int)
+    float_RP 095sum_float = 095add(10.5, 20);
+    
+    // Type compatibility tests (with errors)
+    int_RP 095bad_assign = 20.5;  // Error: assigning float to int - type conversion occurs
+    float_RP 095mod_test = 095num1 % 095num2;  // Error: modulo requires integer operands
+    int_RP 095conversion = 095num2;  // Error: assigning float to int without cast
+    int_RP 095mixed_expr = 095num1 + 095num2;  // Error: adding int and float and assigning to int
+    
+    // Invalid function calls (commented out to allow parsing to continue)
+    095undefinedFunction();  // Error: undefined function
+    095add(1);  // Error: wrong number of arguments
+    095add(1, 2, 3);  // Error: too many arguments
+    int_RP 095type_mismatch = 095calculate(095num1, 095num2);  // Warning: assigning float to int
+}
