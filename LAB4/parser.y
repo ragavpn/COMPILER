@@ -65,6 +65,9 @@ int lookupFunctionOverload(char* name, char* returnType, char** paramTypes, int 
 // Add this prototype near the other function prototypes (around line 60)
 int evaluateExpr(const char* op, int leftVal, int rightVal);
 
+// Add this prototype before any use of generateTACForNode
+void generateTACForNode(Node *node);
+
 Node *createNode(char *name, char *type, Node *left, Node *right) {
     Node *node = (Node *)malloc(sizeof(Node));
     node->name = strdup(name);
@@ -384,7 +387,7 @@ void printFunctionTable() {
     printf("+------+----------------+----------------+-------------------------+\n");
 }
 
-// Add to your printTree function to include function table
+// Add to your printTree function to include function table and DAG
 void printAST() {
     // Print parse tree
     printf("Parse Tree:\n");
@@ -419,28 +422,176 @@ char* newTemp() {
 
 // Function to add a TAC instruction
 void addTAC(char *result, char *arg1, char *op, char *arg2) {
-    tacTable[tacCount].result = strdup(result);
-    tacTable[tacCount].arg1 = strdup(arg1);
+    tacTable[tacCount].result = result ? strdup(result) : NULL;
+    tacTable[tacCount].arg1 = arg1 ? strdup(arg1) : NULL;
     tacTable[tacCount].op = op ? strdup(op) : NULL;
     tacTable[tacCount].arg2 = arg2 ? strdup(arg2) : NULL;
     tacCount++;
 }
 
-// Function to print the TAC table
+// Function to print the TAC in proper three-address code format with labels and control flow
 void printTAC() {
-    printf("\nThree-Address Code:\n");
-    printf("+----------------+----------------+--------+----------------+\n");
-    printf("| Result         | Arg1           | Op     | Arg2           |\n");
-    printf("+----------------+----------------+--------+----------------+\n");
+    printf("\nThree-Address Code:\nL0:\n");
     for (int i = 0; i < tacCount; i++) {
-        printf("| %-14s | %-14s | %-6s | %-14s |\n",
-               tacTable[i].result,
-               tacTable[i].arg1,
-               tacTable[i].op ? tacTable[i].op : "",
-               tacTable[i].arg2 ? tacTable[i].arg2 : "");
+        int isLabel = (tacTable[i].result && tacTable[i].op == NULL && tacTable[i].arg1 == NULL && tacTable[i].arg2 == NULL);
+        if (isLabel) {
+            printf("%s:\n", tacTable[i].result);
+        } else if (tacTable[i].op == NULL) {
+            // Assignment (remove double equals, print as "a = b")
+            if (tacTable[i].result && tacTable[i].arg1) {
+                printf("    %s = %s\n", tacTable[i].result, tacTable[i].arg1);
+            }
+        } else if (strcmp(tacTable[i].op, "if") == 0) {
+            printf("    if %s goto %s\n", tacTable[i].arg1, tacTable[i].arg2);
+        } else if (strcmp(tacTable[i].op, "goto") == 0) {
+            printf("    goto %s\n", tacTable[i].arg1);
+        } else {
+            if (tacTable[i].result && tacTable[i].arg1 && tacTable[i].arg2)
+                printf("    %s = %s %s %s\n", tacTable[i].result, tacTable[i].arg1, tacTable[i].op, tacTable[i].arg2);
+            else if (tacTable[i].result && tacTable[i].arg1)
+                printf("    %s = %s %s\n", tacTable[i].result, tacTable[i].op, tacTable[i].arg1);
+        }
     }
-    printf("+----------------+----------------+--------+----------------+\n");
 }
+
+// Function to add a TAC instruction with labels for control flow
+void addTACWithLabel(char *label, char *result, char *arg1, char *op, char *arg2) {
+    if (label != NULL) {
+        tacTable[tacCount].result = strdup(label);
+        tacTable[tacCount].arg1 = NULL;
+        tacTable[tacCount].op = NULL;
+        tacTable[tacCount].arg2 = NULL;
+        tacCount++;
+    }
+    addTAC(result, arg1, op, arg2);
+}
+
+// Function to generate a new label
+char* newLabel() {
+    char *label = (char *)malloc(10);
+    sprintf(label, "L%d", tempVarCount++);
+    return label;
+}
+
+// Modify TAC generation for control flow constructs
+void generateSwitchTAC(char *switchVar, Node *cases, Node *defaultCase) {
+    char *testLabel = newLabel();
+    char *endLabel = newLabel();
+
+    // Generate test conditions for each case
+    Node *currentCase = cases;
+    while (currentCase != NULL) {
+        char *caseLabel = newLabel();
+        char *caseValue = currentCase->left->name; // Case value
+        addTAC(NULL, switchVar, "==", caseValue);
+        addTAC(NULL, NULL, "if", caseLabel);
+
+        // Generate case body
+        addTACWithLabel(caseLabel, NULL, NULL, NULL, NULL);
+        generateTACForNode(currentCase->right); // Case body
+        addTAC(NULL, NULL, "goto", endLabel);
+
+        currentCase = currentCase->right; // Move to next case
+    }
+
+    // Generate default case
+    if (defaultCase != NULL) {
+        char *defaultLabel = newLabel();
+        addTACWithLabel(defaultLabel, NULL, NULL, NULL, NULL);
+        generateTACForNode(defaultCase);
+    }
+
+    // End label
+    addTACWithLabel(endLabel, NULL, NULL, NULL, NULL);
+}
+
+// Modify TAC generation for while loops
+void generateWhileTAC(Node *condition, Node *body) {
+    char *startLabel = newLabel();
+    char *testLabel = newLabel();
+    char *endLabel = newLabel();
+
+    addTACWithLabel(startLabel, NULL, NULL, NULL, NULL);
+    generateTACForNode(condition);
+    addTAC(NULL, condition->name, "if", testLabel);
+    addTAC(NULL, NULL, "goto", endLabel);
+
+    addTACWithLabel(testLabel, NULL, NULL, NULL, NULL);
+    generateTACForNode(body);
+    addTAC(NULL, NULL, "goto", startLabel);
+
+    addTACWithLabel(endLabel, NULL, NULL, NULL, NULL);
+}
+
+// Modify TAC generation for for loops
+void generateForTAC(Node *init, Node *condition, Node *increment, Node *body) {
+    char *startLabel = newLabel();
+    char *testLabel = newLabel();
+    char *endLabel = newLabel();
+
+    generateTACForNode(init);
+    addTACWithLabel(startLabel, NULL, NULL, NULL, NULL);
+    generateTACForNode(condition);
+    addTAC(NULL, condition->name, "if", testLabel);
+    addTAC(NULL, NULL, "goto", endLabel);
+
+    addTACWithLabel(testLabel, NULL, NULL, NULL, NULL);
+    generateTACForNode(body);
+    generateTACForNode(increment);
+    addTAC(NULL, NULL, "goto", startLabel);
+
+    addTACWithLabel(endLabel, NULL, NULL, NULL, NULL);
+}
+
+// Modify TAC generation for if-else constructs
+void generateIfElseTAC(Node *condition, Node *ifBody, Node *elseBody) {
+    char *ifLabel = newLabel();
+    char *elseLabel = newLabel();
+    char *endLabel = newLabel();
+
+    generateTACForNode(condition);
+    addTAC(NULL, condition->name, "if", ifLabel);
+    addTAC(NULL, NULL, "goto", elseLabel);
+
+    addTACWithLabel(ifLabel, NULL, NULL, NULL, NULL);
+    generateTACForNode(ifBody);
+    addTAC(NULL, NULL, "goto", endLabel);
+
+    addTACWithLabel(elseLabel, NULL, NULL, NULL, NULL);
+    if (elseBody != NULL) {
+        generateTACForNode(elseBody);
+    }
+
+    addTACWithLabel(endLabel, NULL, NULL, NULL, NULL);
+}
+
+// Helper to generate TAC for a statement node (minimal, for control flow)
+void generateTACForNode(Node *node) {
+    if (!node) return;
+    // Only generate for assignment and expression nodes for now
+    if (strcmp(node->name, "Assignment") == 0) {
+        addTAC(node->left->name, node->right->name, "=", NULL);
+    } else if (strcmp(node->name, "++") == 0 || strcmp(node->name, "--") == 0) {
+        char *temp = newTemp();
+        addTAC(temp, node->left->name, strcmp(node->name, "++") == 0 ? "+" : "-", "1");
+        addTAC(node->left->name, temp, "=", NULL);
+    } else if (strcmp(node->name, "IfElse") == 0) {
+        // handled in parser rule
+    } else if (strcmp(node->name, "If") == 0) {
+        // handled in parser rule
+    } else if (strcmp(node->name, "While") == 0) {
+        // handled in parser rule
+    } else if (strcmp(node->name, "For") == 0) {
+        // handled in parser rule
+    } else if (strcmp(node->name, "Switch") == 0) {
+        // handled in parser rule
+    } else {
+        // Recursively generate for children
+        generateTACForNode(node->left);
+        generateTACForNode(node->right);
+    }
+}
+
 %}
 
 %left OR
@@ -644,34 +795,41 @@ matched_stmt:
             Node *if_node = createNode("If", "control", $3, $5);
             Node *else_node = createNode("Else", "control", NULL, $7);
             $$ = createNode("IfElse", "control", if_node, else_node);
+
+            // TAC for if-else
+            char *label_true = newLabel();
+            char *label_false = newLabel();
+            char *label_end = newLabel();
+            addTAC(NULL, NULL, NULL, NULL); // for alignment
+            addTAC(NULL, NULL, NULL, NULL);
+            addTAC(NULL, $3->name, "if", label_true);
+            addTAC(NULL, NULL, "goto", label_false);
+            addTAC(label_true, NULL, NULL, NULL);
+            generateTACForNode($5);
+            addTAC(NULL, NULL, "goto", label_end);
+            addTAC(label_false, NULL, NULL, NULL);
+            generateTACForNode($7);
+            addTAC(label_end, NULL, NULL, NULL);
         } else {
             yyerror("Expected 'if_RP' and 'else_RP' keywords");
-            $$ = NULL;
-        }
-    }
-    | KEYWORD LPAREN expression RPAREN matched_stmt elif_chain KEYWORD matched_stmt {
-        if (strcmp($1, "if_RP") == 0 && strcmp($7, "else_RP") == 0) {
-            Node *if_node = createNode("If", "control", $3, $5);
-            // Add the elif chain in between
-            Node *elif_else = createNode("ElifElse", "control", $6, $8);
-            $$ = createNode("IfElifElse", "control", if_node, elif_else);
-        } else {
-            yyerror("Expected 'if_RP' and 'else_RP' keywords");
-            $$ = NULL;
-        }
-    }
-    | KEYWORD LPAREN expression RPAREN matched_stmt elif_chain {
-        if (strcmp($1, "if_RP") == 0) {
-            Node *if_node = createNode("If", "control", $3, $5);
-            $$ = createNode("IfElif", "control", if_node, $6);
-        } else {
-            yyerror("Expected 'if_RP' keyword");
             $$ = NULL;
         }
     }
     | KEYWORD LPAREN expression RPAREN matched_stmt {
         if (strcmp($1, "while_RP") == 0) {
             $$ = createNode("While", "control", $3, $5);
+
+            // TAC for while
+            char *label_start = newLabel();
+            char *label_body = newLabel();
+            char *label_end = newLabel();
+            addTAC(label_start, NULL, NULL, NULL);
+            addTAC(NULL, $3->name, "if", label_body);
+            addTAC(NULL, NULL, "goto", label_end);
+            addTAC(label_body, NULL, NULL, NULL);
+            generateTACForNode($5);
+            addTAC(NULL, NULL, "goto", label_start);
+            addTAC(label_end, NULL, NULL, NULL);
         } else {
             yyerror("Expected 'while_RP' keyword");
             $$ = NULL;
@@ -684,8 +842,29 @@ unmatched_stmt:
     KEYWORD LPAREN expression RPAREN statement {
         if (strcmp($1, "if_RP") == 0) {
             $$ = createNode("If", "control", $3, $5);
+
+            // TAC for if (no else)
+            char *label_true = newLabel();
+            char *label_end = newLabel();
+            addTAC(NULL, $3->name, "if", label_true);
+            addTAC(NULL, NULL, "goto", label_end);
+            addTAC(label_true, NULL, NULL, NULL);
+            generateTACForNode($5);
+            addTAC(label_end, NULL, NULL, NULL);
         } else if (strcmp($1, "while_RP") == 0) {
             $$ = createNode("While", "control", $3, $5);
+
+            // TAC for while
+            char *label_start = newLabel();
+            char *label_body = newLabel();
+            char *label_end = newLabel();
+            addTAC(label_start, NULL, NULL, NULL);
+            addTAC(NULL, $3->name, "if", label_body);
+            addTAC(NULL, NULL, "goto", label_end);
+            addTAC(label_body, NULL, NULL, NULL);
+            generateTACForNode($5);
+            addTAC(NULL, NULL, "goto", label_start);
+            addTAC(label_end, NULL, NULL, NULL);
         } else {
             yyerror("Expected 'if_RP' or 'while_RP' keyword");
             $$ = NULL;
@@ -723,6 +902,20 @@ for_statement:
             $$ = createNode("For", "control", $3,
                 createNode("ForBody", "control", $5,
                     createNode("ForIncr", "control", $7, $9)));
+
+            // TAC for for loop
+            char *label_start = newLabel();
+            char *label_body = newLabel();
+            char *label_end = newLabel();
+            generateTACForNode($3); // init
+            addTAC(label_start, NULL, NULL, NULL);
+            addTAC(NULL, $5->name, "if", label_body);
+            addTAC(NULL, NULL, "goto", label_end);
+            addTAC(label_body, NULL, NULL, NULL);
+            generateTACForNode($9); // body
+            generateTACForNode($7); // increment
+            addTAC(NULL, NULL, "goto", label_start);
+            addTAC(label_end, NULL, NULL, NULL);
         } else {
             yyerror("Expected 'for_RP' keyword");
             $$ = NULL;
@@ -771,6 +964,45 @@ switch_statement:
     KEYWORD LPAREN expression RPAREN LBRACE cases RBRACE {
         if (strcmp($1, "switch_RP") == 0) {
             $$ = createNode("Switch", "control", $3, $6);
+
+            // TAC for switch
+            // For simplicity, generate a sequence of if-goto for each case, then goto default if present
+            Node *cases = $6;
+            char *endLabel = newLabel();
+            Node *current = cases;
+            while (current) {
+                if (strcmp(current->name, "Cases") == 0) {
+                    Node *caseNode = current->right;
+                    if (caseNode && strcmp(caseNode->name, "Case") == 0) {
+                        char *caseLabel = newLabel();
+                        addTAC(NULL, $3->name, "==", caseNode->left->name);
+                        addTAC(NULL, NULL, "if", caseLabel);
+                        // ... skip to next case if not matched
+                        // Save label for case body
+                        addTAC(caseLabel, NULL, NULL, NULL);
+                        generateTACForNode(caseNode->right); // Case body
+                        addTAC(NULL, NULL, "goto", endLabel);
+                    }
+                    current = current->left;
+                } else if (strcmp(current->name, "Case") == 0) {
+                    char *caseLabel = newLabel();
+                    addTAC(NULL, $3->name, "==", current->left->name);
+                    addTAC(NULL, NULL, "if", caseLabel);
+                    addTAC(caseLabel, NULL, NULL, NULL);
+                    generateTACForNode(current->right);
+                    addTAC(NULL, NULL, "goto", endLabel);
+                    break;
+                } else if (strcmp(current->name, "Default") == 0) {
+                    char *defaultLabel = newLabel();
+                    addTAC(defaultLabel, NULL, NULL, NULL);
+                    generateTACForNode(current->right);
+                    addTAC(NULL, NULL, "goto", endLabel);
+                    break;
+                } else {
+                    break;
+                }
+            }
+            addTAC(endLabel, NULL, NULL, NULL);
         } else {
             yyerror("Expected 'switch_RP' keyword");
             $$ = NULL;

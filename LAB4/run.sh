@@ -7,6 +7,9 @@ fi
 
 input_file=$1
 
+# Delete any existing generated files
+rm -f parser.tab.c parser.tab.h lex.yy.c parser
+
 # Generate the parser
 bison -d parser.y
 
